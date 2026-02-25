@@ -1154,6 +1154,8 @@ function buildExperience() {
         area.innerHTML = buildDiscoveryExperience(name, modeName);
     } else if (selectedMode === 'generation') {
         area.innerHTML = buildGenerationExperience(name, modeName);
+    } else if (selectedMode === 'digestor') {
+        area.innerHTML = buildDigestorExperience(name, modeName);
     } else {
         area.innerHTML = buildDefaultExperience(name, modeName);
     }
@@ -1177,6 +1179,10 @@ function buildJAWExperience(name, modeName) {
                 <div class="prompt-chip" onclick="sendJAWPrompt(this, 0)">Build me a 2-hour deep house set</div>
                 <div class="prompt-chip" onclick="sendJAWPrompt(this, 1)">What key goes with Bb minor?</div>
                 <div class="prompt-chip" onclick="sendJAWPrompt(this, 2)">Energy check on my tracklist</div>
+            </div>
+            <div style="display:flex;gap:8px;width:100%;max-width:600px;margin-top:8px;">
+                <input type="text" id="jawInput" placeholder="Ask J.A.W. anything..." onkeydown="if(event.key==='Enter')sendJAWFreeInput()" style="flex:1;padding:12px 16px;border-radius:16px;border:2px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:#FFFEF7;font-family:'Nunito',sans-serif;font-size:0.9rem;outline:none;">
+                <button onclick="sendJAWFreeInput()" style="padding:12px 20px;border-radius:16px;border:none;background:linear-gradient(135deg,#D4A017,#B8860B);color:#0D0D1A;font-weight:800;cursor:pointer;font-family:'Nunito',sans-serif;">Send</button>
             </div>
         </div>`;
 }
@@ -1214,9 +1220,35 @@ function sendJAWPrompt(el, idx) {
     if (el.classList.contains('used')) return;
     el.classList.add('used');
     const msgs = document.getElementById('chatMessages');
-    msgs.innerHTML += `<div class="chat-msg user">${el.textContent}</div>`;
-    setTimeout(() => {
-        msgs.innerHTML += `<div class="chat-msg assistant"><div class="msg-label">J.A.W.</div>${JAW_RESPONSES[idx]}</div>`;
+    const userText = el.textContent;
+    msgs.innerHTML += `<div class="chat-msg user">${userText}</div>`;
+
+    // Try real AI first, fall back to canned responses
+    msgs.innerHTML += `<div class="chat-msg assistant" id="jawPending"><div class="msg-label">J.A.W.</div>Thinking...</div>`;
+    msgs.scrollTop = msgs.scrollHeight;
+
+    fetch('/api/chat', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({messages: [{role: 'user', content: userText}]})
+    })
+    .then(r => r.json())
+    .then(data => {
+        const pending = document.getElementById('jawPending');
+        if (data.response) {
+            pending.innerHTML = `<div class="msg-label">J.A.W.</div>${data.response.replace(/\n/g, '<br>')}`;
+        } else {
+            pending.innerHTML = `<div class="msg-label">J.A.W.</div>${JAW_RESPONSES[idx]}`;
+        }
+        pending.removeAttribute('id');
+        msgs.scrollTop = msgs.scrollHeight;
+    })
+    .catch(() => {
+        const pending = document.getElementById('jawPending');
+        if (pending) {
+            pending.innerHTML = `<div class="msg-label">J.A.W.</div>${JAW_RESPONSES[idx]}`;
+            pending.removeAttribute('id');
+        }
         msgs.scrollTop = msgs.scrollHeight;
     }, 600);
 }
@@ -1469,6 +1501,138 @@ function buildDefaultExperience(name, modeName) {
 
 function toggleSampleCard(el) {
     el.classList.toggle('expanded');
+}
+
+/* --- Mix Digestor (Real file upload + AudD) --- */
+function buildDigestorExperience(name, modeName) {
+    return `
+        <div class="experience-title">
+            <h2>${modeName}</h2>
+            <p>Upload a DJ mix. Get the full tracklist.</p>
+        </div>
+        <div style="width:100%;max-width:600px;">
+            <div style="background:rgba(255,255,255,0.03);border:2px dashed rgba(212,160,23,0.3);border-radius:16px;padding:32px;text-align:center;margin-bottom:16px;cursor:pointer;" onclick="document.getElementById('mixFile').click()" id="dropZone">
+                <div style="font-size:2.5rem;margin-bottom:8px;">🔬</div>
+                <div style="font-family:'Playfair Display',serif;font-size:1.1rem;color:#FFE082;margin-bottom:4px;">Drop your mix here</div>
+                <div style="font-size:0.75rem;color:#8A7A5A;">MP3, WAV, M4A, FLAC — up to 500MB</div>
+                <input type="file" id="mixFile" accept="audio/*" style="display:none" onchange="uploadMix(this)">
+            </div>
+            <div id="digestorStatus" style="display:none;text-align:center;padding:16px;">
+                <div style="font-size:0.85rem;color:#D4A017;" id="digestorMsg">Processing...</div>
+                <div style="width:100%;height:4px;background:rgba(255,255,255,0.06);border-radius:2px;margin-top:12px;overflow:hidden;">
+                    <div id="digestorBar" style="width:0%;height:100%;background:linear-gradient(90deg,#D4A017,#FFE082);border-radius:2px;transition:width 0.5s ease;"></div>
+                </div>
+            </div>
+            <div id="digestorResults" style="display:none;"></div>
+        </div>`;
+}
+
+function uploadMix(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const dropZone = document.getElementById('dropZone');
+    const status = document.getElementById('digestorStatus');
+    const results = document.getElementById('digestorResults');
+    const msg = document.getElementById('digestorMsg');
+    const bar = document.getElementById('digestorBar');
+
+    dropZone.style.display = 'none';
+    status.style.display = 'block';
+    results.style.display = 'none';
+    msg.textContent = `Uploading "${file.name}"...`;
+    bar.style.width = '20%';
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    setTimeout(() => { msg.textContent = 'Scanning with AudD Enterprise...'; bar.style.width = '50%'; }, 2000);
+    setTimeout(() => { msg.textContent = 'Fingerprinting audio segments...'; bar.style.width = '70%'; }, 8000);
+
+    fetch('/api/digestor', { method: 'POST', body: formData })
+    .then(r => r.json())
+    .then(data => {
+        bar.style.width = '100%';
+        if (data.error) {
+            msg.textContent = 'Error: ' + data.error;
+            msg.style.color = '#C41E3A';
+            return;
+        }
+        if (!data.tracks || data.tracks.length === 0) {
+            msg.textContent = 'No tracks identified. Try a different mix with more well-known tracks.';
+            msg.style.color = '#C41E3A';
+            return;
+        }
+
+        status.style.display = 'none';
+        results.style.display = 'block';
+        results.innerHTML = `
+            <div style="text-align:center;margin-bottom:16px;">
+                <span style="font-family:'Playfair Display',serif;font-size:1.2rem;color:#FFE082;">${data.unique_tracks} Tracks Identified</span>
+                <div style="font-size:0.65rem;color:#8A7A5A;margin-top:4px;">${data.raw_matches} fingerprint matches processed</div>
+            </div>
+            ${data.tracks.map(t => `
+                <div style="display:flex;align-items:center;gap:12px;padding:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;margin-bottom:8px;">
+                    ${t.album_art ? `<img src="${t.album_art}" style="width:48px;height:48px;border-radius:8px;">` : `<div style="width:48px;height:48px;border-radius:8px;background:rgba(212,160,23,0.1);display:flex;align-items:center;justify-content:center;">🎵</div>`}
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:0.85rem;font-weight:700;color:#FFFEF7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.title}</div>
+                        <div style="font-size:0.7rem;color:#8A7A5A;">${t.artist}</div>
+                    </div>
+                    <div style="text-align:right;flex-shrink:0;">
+                        <div style="font-size:0.8rem;color:#D4A017;font-weight:700;">${t.timestamp}</div>
+                        <div style="display:flex;gap:6px;margin-top:4px;">
+                            ${t.spotify_url ? `<a href="${t.spotify_url}" target="_blank" style="font-size:0.6rem;color:#1DB954;text-decoration:none;">Spotify</a>` : ''}
+                            ${t.apple_music_url ? `<a href="${t.apple_music_url}" target="_blank" style="font-size:0.6rem;color:#FC3C44;text-decoration:none;">Apple</a>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `).join('')}
+            <div style="text-align:center;margin-top:16px;">
+                <button class="nav-btn primary" onclick="location.reload()" style="font-size:0.8rem;padding:10px 24px;">Analyze Another Mix</button>
+            </div>`;
+    })
+    .catch(err => {
+        bar.style.width = '100%';
+        msg.textContent = 'Upload failed: ' + err.message;
+        msg.style.color = '#C41E3A';
+    });
+}
+
+/* --- JAW Free-type input --- */
+function sendJAWFreeInput() {
+    const input = document.getElementById('jawInput');
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+
+    const msgs = document.getElementById('chatMessages');
+    msgs.innerHTML += `<div class="chat-msg user">${text}</div>`;
+    msgs.innerHTML += `<div class="chat-msg assistant" id="jawFree"><div class="msg-label">J.A.W.</div>Thinking...</div>`;
+    msgs.scrollTop = msgs.scrollHeight;
+
+    fetch('/api/chat', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({messages: [{role: 'user', content: text}]})
+    })
+    .then(r => r.json())
+    .then(data => {
+        const el = document.getElementById('jawFree');
+        if (data.response) {
+            el.innerHTML = `<div class="msg-label">J.A.W.</div>${data.response.replace(/\n/g, '<br>')}`;
+        } else {
+            el.innerHTML = `<div class="msg-label">J.A.W.</div>AI not connected. Add Azure OpenAI keys to use live chat.`;
+        }
+        el.removeAttribute('id');
+        msgs.scrollTop = msgs.scrollHeight;
+    })
+    .catch(() => {
+        const el = document.getElementById('jawFree');
+        if (el) {
+            el.innerHTML = `<div class="msg-label">J.A.W.</div>Connection error. Try again.`;
+            el.removeAttribute('id');
+        }
+    });
 }
 </script>
 </body>
