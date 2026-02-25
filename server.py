@@ -572,6 +572,134 @@ async def dashboard():
     }
 
 
+# ── Spotify (Client Credentials) ─────────────────────────────────────────────
+
+import base64
+from datetime import datetime, timedelta
+
+_spotify_token = {"access_token": None, "expires_at": datetime.min}
+
+
+async def get_spotify_token():
+    """Get a Spotify access token using Client Credentials flow. Caches until expiry."""
+    global _spotify_token
+    if _spotify_token["access_token"] and datetime.now() < _spotify_token["expires_at"]:
+        return _spotify_token["access_token"]
+
+    client_id = get_secret("SPOTIFY_CLIENT_ID")
+    client_secret = get_secret("SPOTIFY_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        return None
+
+    auth = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            "https://accounts.spotify.com/api/token",
+            headers={"Authorization": f"Basic {auth}", "Content-Type": "application/x-www-form-urlencoded"},
+            data={"grant_type": "client_credentials"},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        _spotify_token["access_token"] = data["access_token"]
+        _spotify_token["expires_at"] = datetime.now() + timedelta(seconds=data["expires_in"] - 60)
+        return _spotify_token["access_token"]
+
+
+@app.get("/api/spotify/search")
+async def spotify_search(q: str, type: str = "track", limit: int = 10):
+    """Search Spotify for tracks, artists, or albums."""
+    token = await get_spotify_token()
+    if not token:
+        return JSONResponse({"error": "Spotify not configured"}, status_code=503)
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            "https://api.spotify.com/v1/search",
+            headers={"Authorization": f"Bearer {token}"},
+            params={"q": q, "type": type, "limit": limit},
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+
+@app.get("/api/spotify/recommendations")
+async def spotify_recommendations(seed_genres: str = "", seed_artists: str = "", seed_tracks: str = "",
+                                   target_bpm: int = 0, limit: int = 10):
+    """Get Spotify recommendations based on seeds."""
+    token = await get_spotify_token()
+    if not token:
+        return JSONResponse({"error": "Spotify not configured"}, status_code=503)
+
+    params = {"limit": limit}
+    if seed_genres:
+        params["seed_genres"] = seed_genres
+    if seed_artists:
+        params["seed_artists"] = seed_artists
+    if seed_tracks:
+        params["seed_tracks"] = seed_tracks
+    if target_bpm:
+        params["target_tempo"] = target_bpm
+
+    if not any(k.startswith("seed_") for k in params):
+        params["seed_genres"] = "electronic"
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            "https://api.spotify.com/v1/recommendations",
+            headers={"Authorization": f"Bearer {token}"},
+            params=params,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+    tracks = []
+    for t in data.get("tracks", []):
+        artists = ", ".join(a["name"] for a in t.get("artists", []))
+        album = t.get("album", {})
+        images = album.get("images", [])
+        tracks.append({
+            "title": t["name"],
+            "artist": artists,
+            "spotify_url": t.get("external_urls", {}).get("spotify"),
+            "album_art": images[0]["url"] if images else None,
+            "preview_url": t.get("preview_url"),
+            "spotify_id": t["id"],
+        })
+    return {"tracks": tracks}
+
+
+@app.get("/api/spotify/audio-features/{track_id}")
+async def spotify_audio_features(track_id: str):
+    """Get audio features (BPM, key, energy, danceability) for a Spotify track."""
+    token = await get_spotify_token()
+    if not token:
+        return JSONResponse({"error": "Spotify not configured"}, status_code=503)
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            f"https://api.spotify.com/v1/audio-features/{track_id}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+    key_names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+    key_idx = data.get("key", -1)
+    mode = "major" if data.get("mode", 0) == 1 else "minor"
+    key_str = f"{key_names[key_idx]} {mode}" if 0 <= key_idx < 12 else "Unknown"
+
+    return {
+        "bpm": round(data.get("tempo", 0)),
+        "key": key_str,
+        "energy": round(data.get("energy", 0), 2),
+        "danceability": round(data.get("danceability", 0), 2),
+        "valence": round(data.get("valence", 0), 2),
+        "acousticness": round(data.get("acousticness", 0), 2),
+        "instrumentalness": round(data.get("instrumentalness", 0), 2),
+        "duration_ms": data.get("duration_ms", 0),
+    }
+
+
 # ── API Status ────────────────────────────────────────────────────────────────
 
 @app.get("/api/status")
@@ -580,6 +708,7 @@ async def api_status():
         "azure_openai": bool(get_secret("AZURE_OPENAI_ENDPOINT") and get_secret("AZURE_OPENAI_KEY")),
         "audd": bool(get_secret("AUDD_API_TOKEN")),
         "replicate": bool(get_secret("REPLICATE_API_TOKEN")),
+        "spotify": bool(get_secret("SPOTIFY_CLIENT_ID") and get_secret("SPOTIFY_CLIENT_SECRET")),
     }
 
 
