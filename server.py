@@ -60,6 +60,7 @@ async def chat(payload: dict):
 # ── AudD Mix Digestor ─────────────────────────────────────────────────────────
 
 AUDD_API_URL = "https://enterprise.audd.io/"
+MUSICGEN_MODEL = "meta/musicgen:671ac645ce5e552cc63a54a2bbff63fcf798043055d2dac5fc9e36a837eedbd"
 
 
 def format_timestamp(seconds):
@@ -444,6 +445,50 @@ async def generate(payload: dict):
                 "description": raw
             }
         return result
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# ── AI Audio Generation (MusicGen via Replicate) ─────────────────────────────
+
+@app.post("/api/generate/audio")
+async def generate_audio(payload: dict):
+    """Generate actual audio from a text prompt using Meta's MusicGen model."""
+    token = get_secret("REPLICATE_API_TOKEN")
+    if not token:
+        return JSONResponse({"error": "Replicate API token not configured"}, status_code=503)
+
+    os.environ["REPLICATE_API_TOKEN"] = token
+
+    prompt = payload.get("prompt", "")
+    if not prompt:
+        return JSONResponse({"error": "No prompt provided"}, status_code=400)
+
+    duration = payload.get("duration", 8)
+    if not isinstance(duration, (int, float)):
+        try:
+            duration = int(duration)
+        except (ValueError, TypeError):
+            duration = 8
+    duration = max(1, min(int(duration), 30))
+
+    try:
+        output = replicate.run(
+            MUSICGEN_MODEL,
+            input={
+                "prompt": prompt,
+                "duration": duration,
+                "model_version": "stereo-melody-large",
+            },
+        )
+
+        # MusicGen returns a single audio URL (FileOutput or string)
+        audio_url = str(output) if output else None
+        if not audio_url:
+            return JSONResponse({"error": "No audio generated"}, status_code=500)
+
+        return {"audio_url": audio_url, "prompt": prompt, "duration": duration}
+
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 

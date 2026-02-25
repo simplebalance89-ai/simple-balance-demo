@@ -872,6 +872,12 @@
             <p class="welcome-desc">AI-powered music production suite. Create beats, master tracks, separate stems, and build DJ sets.</p>
             <p class="welcome-sub">The future of music production</p>
             <button class="welcome-cta" onclick="goToStep(1)">Start Experience</button>
+            <div style="margin-top:20px;display:flex;flex-direction:column;align-items:center;gap:10px;">
+                <button onclick="alert('Spotify integration coming soon!')" style="padding:12px 32px;border-radius:24px;border:2px solid #1DB954;background:transparent;color:#1DB954;font-family:'Nunito',sans-serif;font-size:0.9rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px;">
+                    🎵 Connect Spotify
+                </button>
+                <span style="font-size:0.7rem;color:#444;letter-spacing:1px;">TIDAL — COMING SOON</span>
+            </div>
             <div class="welcome-powered">POWERED BY CAPO AI</div>
         </div>
     </div>
@@ -1075,9 +1081,54 @@ function showNotConfigured(container, modeName) {
 let currentStep = 0;
 let selectedRole = null;
 let selectedMode = null;
+let apiStatus = { azure_openai: false, audd: false, replicate: false };
 const userName = () => document.getElementById('userName').value.trim();
 
 const STEP_LABELS = ['Welcome', 'Profile', 'Mode', 'Experience', 'Overview'];
+
+/* ===== API STATUS CHECK ===== */
+const API_REQUIREMENTS = {
+    jaw: 'azure_openai',
+    mastering: 'azure_openai',
+    discovery: 'azure_openai',
+    generation: 'azure_openai',
+    events: 'azure_openai',
+    setbuilder: 'azure_openai',
+    tools: 'azure_openai',
+    stems: 'replicate',
+    digestor: 'audd'
+};
+
+(function fetchApiStatus() {
+    fetch('/api/status')
+        .then(r => r.json())
+        .then(data => {
+            apiStatus = data;
+            updateModeCards();
+        })
+        .catch(() => {
+            // Leave defaults (all false), update cards
+            updateModeCards();
+        });
+})();
+
+function updateModeCards() {
+    document.querySelectorAll('.mode-card').forEach(card => {
+        const mode = card.getAttribute('data-mode');
+        const requiredApi = API_REQUIREMENTS[mode];
+        // Remove any existing badge
+        const existing = card.querySelector('.api-badge');
+        if (existing) existing.remove();
+        // If this mode needs an API and it's not configured, add badge
+        if (requiredApi && !apiStatus[requiredApi]) {
+            const badge = document.createElement('div');
+            badge.className = 'api-badge';
+            badge.textContent = 'Keys Required';
+            badge.style.cssText = 'font-size:0.65rem;color:#C41E3A;margin-top:6px;font-weight:700;letter-spacing:0.5px;opacity:0.85;';
+            card.appendChild(badge);
+        }
+    });
+}
 
 /* ===== NAVIGATION ===== */
 function goToStep(n) {
