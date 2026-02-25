@@ -700,6 +700,100 @@ async def spotify_audio_features(track_id: str):
     }
 
 
+@app.get("/api/spotify/user/{user_id}/playlists")
+async def spotify_user_playlists(user_id: str, limit: int = 20):
+    """Get a user's public playlists."""
+    token = await get_spotify_token()
+    if not token:
+        return JSONResponse({"error": "Spotify not configured"}, status_code=503)
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            f"https://api.spotify.com/v1/users/{user_id}/playlists",
+            headers={"Authorization": f"Bearer {token}"},
+            params={"limit": limit},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+    playlists = []
+    for p in data.get("items", []):
+        images = p.get("images", [])
+        playlists.append({
+            "id": p["id"],
+            "name": p["name"],
+            "tracks_count": p.get("tracks", {}).get("total", 0),
+            "image": images[0]["url"] if images else None,
+            "url": p.get("external_urls", {}).get("spotify"),
+        })
+    return {"playlists": playlists, "user_id": user_id}
+
+
+@app.get("/api/spotify/playlist/{playlist_id}/tracks")
+async def spotify_playlist_tracks(playlist_id: str, limit: int = 50):
+    """Get tracks from a playlist with audio features for seeding."""
+    token = await get_spotify_token()
+    if not token:
+        return JSONResponse({"error": "Spotify not configured"}, status_code=503)
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks",
+            headers={"Authorization": f"Bearer {token}"},
+            params={"limit": limit, "fields": "items(track(id,name,artists,album(images),external_urls,preview_url,duration_ms))"},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+    tracks = []
+    track_ids = []
+    for item in data.get("items", []):
+        t = item.get("track")
+        if not t or not t.get("id"):
+            continue
+        artists = ", ".join(a["name"] for a in t.get("artists", []))
+        album = t.get("album", {})
+        images = album.get("images", [])
+        tracks.append({
+            "title": t["name"],
+            "artist": artists,
+            "spotify_id": t["id"],
+            "spotify_url": t.get("external_urls", {}).get("spotify"),
+            "album_art": images[0]["url"] if images else None,
+            "preview_url": t.get("preview_url"),
+        })
+        track_ids.append(t["id"])
+
+    # Batch fetch audio features for all tracks
+    if track_ids:
+        batch_ids = ",".join(track_ids[:100])
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                "https://api.spotify.com/v1/audio-features",
+                headers={"Authorization": f"Bearer {token}"},
+                params={"ids": batch_ids},
+            )
+            if resp.status_code == 200:
+                features = resp.json().get("audio_features", [])
+                key_names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+                feat_map = {}
+                for f in features:
+                    if f and f.get("id"):
+                        key_idx = f.get("key", -1)
+                        mode = "major" if f.get("mode", 0) == 1 else "minor"
+                        feat_map[f["id"]] = {
+                            "bpm": round(f.get("tempo", 0)),
+                            "key": f"{key_names[key_idx]} {mode}" if 0 <= key_idx < 12 else "?",
+                            "energy": round(f.get("energy", 0), 2),
+                            "danceability": round(f.get("danceability", 0), 2),
+                        }
+                for track in tracks:
+                    af = feat_map.get(track["spotify_id"], {})
+                    track.update(af)
+
+    return {"tracks": tracks, "total": len(tracks)}
+
+
 # ── API Status ────────────────────────────────────────────────────────────────
 
 @app.get("/api/status")
