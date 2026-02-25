@@ -873,10 +873,26 @@
             <p class="welcome-sub">The future of music production</p>
             <button class="welcome-cta" onclick="goToStep(1)">Start Experience</button>
             <div style="margin-top:20px;display:flex;flex-direction:column;align-items:center;gap:10px;">
-                <button onclick="alert('Spotify integration coming soon!')" style="padding:12px 32px;border-radius:24px;border:2px solid #1DB954;background:transparent;color:#1DB954;font-family:'Nunito',sans-serif;font-size:0.9rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px;">
+                <button id="spotifyConnectBtn" onclick="connectSpotify()" style="padding:12px 32px;border-radius:24px;border:2px solid #1DB954;background:transparent;color:#1DB954;font-family:'Nunito',sans-serif;font-size:0.9rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px;">
                     🎵 Connect Spotify
                 </button>
+                <div id="spotifyStatus" style="display:none;"></div>
                 <span style="font-size:0.7rem;color:#444;letter-spacing:1px;">TIDAL — COMING SOON</span>
+            </div>
+            <!-- Spotify Library Panel (hidden until connected) -->
+            <div id="spotifyLibrary" style="display:none;margin-top:20px;width:100%;max-width:500px;">
+                <div style="background:rgba(29,185,84,0.1);border:1px solid rgba(29,185,84,0.3);border-radius:12px;padding:16px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                        <span style="font-family:'Playfair Display',serif;font-size:1rem;color:#1DB954;">Spotify Connected</span>
+                        <span id="spotifyUserLabel" style="font-size:0.75rem;color:#888;"></span>
+                    </div>
+                    <div style="display:flex;gap:8px;margin-bottom:12px;">
+                        <input type="text" id="spotifySearchInput" placeholder="Search tracks, artists..." style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid #333;background:#1a1a2e;color:#fff;font-family:'Nunito',sans-serif;font-size:0.8rem;" onkeydown="if(event.key==='Enter')spotifySearch()">
+                        <button onclick="spotifySearch()" style="padding:8px 16px;border-radius:8px;border:none;background:#1DB954;color:#fff;font-weight:700;cursor:pointer;font-size:0.8rem;">Search</button>
+                    </div>
+                    <div id="spotifyPlaylists" style="max-height:200px;overflow-y:auto;"></div>
+                    <div id="spotifyResults" style="max-height:250px;overflow-y:auto;margin-top:8px;"></div>
+                </div>
             </div>
             <div class="welcome-powered">POWERED BY CAPO AI</div>
         </div>
@@ -1128,6 +1144,118 @@ function updateModeCards() {
             card.appendChild(badge);
         }
     });
+}
+
+/* ===== SPOTIFY ===== */
+let spotifyConnected = false;
+const PETER_SPOTIFY = '31j6zvkbdfpegk3qxzyikrlyz57y';
+const JAW_SPOTIFY = '1228993875';
+
+async function connectSpotify() {
+    const btn = document.getElementById('spotifyConnectBtn');
+    const status = document.getElementById('spotifyStatus');
+    btn.textContent = '⏳ Connecting...';
+    btn.style.opacity = '0.6';
+    btn.disabled = true;
+    try {
+        // Test connection by fetching Peter's playlists
+        const res = await fetch(`/api/spotify/user/${PETER_SPOTIFY}/playlists`);
+        if (!res.ok) throw new Error('Spotify not configured');
+        const data = await res.json();
+        spotifyConnected = true;
+        btn.style.background = '#1DB954';
+        btn.style.color = '#fff';
+        btn.style.border = '2px solid #1DB954';
+        btn.innerHTML = '✓ Spotify Connected';
+        btn.onclick = null;
+        document.getElementById('spotifyLibrary').style.display = 'block';
+        document.getElementById('spotifyUserLabel').textContent = `${data.playlists?.length || 0} playlists loaded`;
+        renderPlaylists(data.playlists || [], 'Peter');
+        // Also fetch JAW playlists
+        const jawRes = await fetch(`/api/spotify/user/${JAW_SPOTIFY}/playlists`);
+        if (jawRes.ok) {
+            const jawData = await jawRes.json();
+            renderPlaylists(jawData.playlists || [], 'JAW');
+        }
+    } catch (e) {
+        btn.textContent = '❌ Connection Failed';
+        btn.style.borderColor = '#C41E3A';
+        btn.style.color = '#C41E3A';
+        status.style.display = 'block';
+        status.innerHTML = '<span style="font-size:0.75rem;color:#C41E3A;">Spotify keys not configured on server. Add SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in Render.</span>';
+        setTimeout(() => {
+            btn.innerHTML = '🎵 Connect Spotify';
+            btn.style.borderColor = '#1DB954';
+            btn.style.color = '#1DB954';
+            btn.style.opacity = '1';
+            btn.disabled = false;
+        }, 3000);
+    }
+}
+
+function renderPlaylists(playlists, owner) {
+    const container = document.getElementById('spotifyPlaylists');
+    if (!playlists.length) return;
+    const section = document.createElement('div');
+    section.innerHTML = `<div style="font-size:0.7rem;color:#888;margin:8px 0 4px;text-transform:uppercase;letter-spacing:1px;">${owner}'s Playlists</div>`;
+    playlists.slice(0, 8).forEach(p => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;transition:background 0.2s;';
+        row.onmouseenter = () => row.style.background = 'rgba(29,185,84,0.15)';
+        row.onmouseleave = () => row.style.background = 'transparent';
+        row.onclick = () => loadPlaylistTracks(p.id, p.name);
+        const img = p.image ? `<img src="${p.image}" style="width:32px;height:32px;border-radius:4px;">` : '<div style="width:32px;height:32px;border-radius:4px;background:#333;display:flex;align-items:center;justify-content:center;font-size:0.7rem;">🎵</div>';
+        row.innerHTML = `${img}<div style="flex:1;min-width:0;"><div style="font-size:0.8rem;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.name}</div><div style="font-size:0.65rem;color:#666;">${p.tracks || 0} tracks</div></div>`;
+        section.appendChild(row);
+    });
+    container.appendChild(section);
+}
+
+async function loadPlaylistTracks(playlistId, playlistName) {
+    const results = document.getElementById('spotifyResults');
+    results.innerHTML = '<div style="text-align:center;padding:12px;color:#888;font-size:0.8rem;">Loading tracks...</div>';
+    try {
+        const res = await fetch(`/api/spotify/playlist/${playlistId}/tracks`);
+        const data = await res.json();
+        const tracks = data.tracks || [];
+        results.innerHTML = `<div style="font-size:0.7rem;color:#1DB954;margin:4px 0 8px;text-transform:uppercase;letter-spacing:1px;">${playlistName} (${tracks.length} tracks)</div>`;
+        tracks.slice(0, 20).forEach(t => {
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;font-size:0.78rem;';
+            const bpm = t.audio_features?.bpm ? `${Math.round(t.audio_features.bpm)} BPM` : '';
+            const key = t.audio_features?.key || '';
+            const meta = [bpm, key].filter(Boolean).join(' · ');
+            const preview = t.preview_url ? `<button onclick="event.stopPropagation();new Audio('${t.preview_url}').play()" style="background:none;border:none;cursor:pointer;font-size:0.7rem;color:#1DB954;">▶</button>` : '';
+            row.innerHTML = `<div style="flex:1;min-width:0;"><div style="color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.name}</div><div style="font-size:0.65rem;color:#666;">${t.artist}${meta ? ' · ' + meta : ''}</div></div>${preview}`;
+            results.appendChild(row);
+        });
+    } catch (e) {
+        results.innerHTML = '<div style="text-align:center;padding:12px;color:#C41E3A;font-size:0.8rem;">Failed to load tracks</div>';
+    }
+}
+
+async function spotifySearch() {
+    const query = document.getElementById('spotifySearchInput').value.trim();
+    if (!query) return;
+    const results = document.getElementById('spotifyResults');
+    results.innerHTML = '<div style="text-align:center;padding:12px;color:#888;font-size:0.8rem;">Searching...</div>';
+    try {
+        const res = await fetch(`/api/spotify/search?q=${encodeURIComponent(query)}&type=track&limit=10`);
+        const data = await res.json();
+        const tracks = data.tracks || [];
+        results.innerHTML = `<div style="font-size:0.7rem;color:#1DB954;margin:4px 0 8px;text-transform:uppercase;letter-spacing:1px;">Results for "${query}"</div>`;
+        if (!tracks.length) { results.innerHTML += '<div style="color:#666;font-size:0.8rem;padding:8px;">No results found</div>'; return; }
+        tracks.forEach(t => {
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;font-size:0.78rem;';
+            const img = t.album_image ? `<img src="${t.album_image}" style="width:28px;height:28px;border-radius:3px;">` : '';
+            const preview = t.preview_url ? `<button onclick="event.stopPropagation();new Audio('${t.preview_url}').play()" style="background:none;border:none;cursor:pointer;font-size:0.7rem;color:#1DB954;">▶</button>` : '';
+            row.innerHTML = `${img}<div style="flex:1;min-width:0;"><div style="color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.name}</div><div style="font-size:0.65rem;color:#666;">${t.artist} · ${t.album || ''}</div></div>${preview}`;
+            results.appendChild(row);
+        });
+    } catch (e) {
+        results.innerHTML = '<div style="text-align:center;padding:12px;color:#C41E3A;font-size:0.8rem;">Search failed</div>';
+    }
 }
 
 /* ===== NAVIGATION ===== */
