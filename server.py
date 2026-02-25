@@ -592,17 +592,21 @@ async def get_spotify_token():
         return None
 
     auth = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            "https://accounts.spotify.com/api/token",
-            headers={"Authorization": f"Basic {auth}", "Content-Type": "application/x-www-form-urlencoded"},
-            data={"grant_type": "client_credentials"},
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        _spotify_token["access_token"] = data["access_token"]
-        _spotify_token["expires_at"] = datetime.now() + timedelta(seconds=data["expires_in"] - 60)
-        return _spotify_token["access_token"]
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                "https://accounts.spotify.com/api/token",
+                headers={"Authorization": f"Basic {auth}", "Content-Type": "application/x-www-form-urlencoded"},
+                data={"grant_type": "client_credentials"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            _spotify_token["access_token"] = data["access_token"]
+            _spotify_token["expires_at"] = datetime.now() + timedelta(seconds=data["expires_in"] - 60)
+            return _spotify_token["access_token"]
+    except Exception as e:
+        logger.error("Spotify token fetch failed: %s", e)
+        return None
 
 
 @app.get("/api/spotify/search")
@@ -707,14 +711,19 @@ async def spotify_user_playlists(user_id: str, limit: int = 20):
     if not token:
         return JSONResponse({"error": "Spotify not configured"}, status_code=503)
 
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            f"https://api.spotify.com/v1/users/{user_id}/playlists",
-            headers={"Authorization": f"Bearer {token}"},
-            params={"limit": limit},
-        )
-        resp.raise_for_status()
-        data = resp.json()
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"https://api.spotify.com/v1/users/{user_id}/playlists",
+                headers={"Authorization": f"Bearer {token}"},
+                params={"limit": limit},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+    except httpx.HTTPStatusError as e:
+        return JSONResponse({"error": f"Spotify API error: {e.response.status_code}", "detail": e.response.text[:200]}, status_code=e.response.status_code)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
     playlists = []
     for p in data.get("items", []):
@@ -722,7 +731,7 @@ async def spotify_user_playlists(user_id: str, limit: int = 20):
         playlists.append({
             "id": p["id"],
             "name": p["name"],
-            "tracks_count": p.get("tracks", {}).get("total", 0),
+            "tracks": p.get("tracks", {}).get("total", 0),
             "image": images[0]["url"] if images else None,
             "url": p.get("external_urls", {}).get("spotify"),
         })
@@ -736,14 +745,19 @@ async def spotify_playlist_tracks(playlist_id: str, limit: int = 50):
     if not token:
         return JSONResponse({"error": "Spotify not configured"}, status_code=503)
 
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks",
-            headers={"Authorization": f"Bearer {token}"},
-            params={"limit": limit, "fields": "items(track(id,name,artists,album(images),external_urls,preview_url,duration_ms))"},
-        )
-        resp.raise_for_status()
-        data = resp.json()
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks",
+                headers={"Authorization": f"Bearer {token}"},
+                params={"limit": limit, "fields": "items(track(id,name,artists,album(images),external_urls,preview_url,duration_ms))"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+    except httpx.HTTPStatusError as e:
+        return JSONResponse({"error": f"Spotify API error: {e.response.status_code}"}, status_code=e.response.status_code)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
     tracks = []
     track_ids = []

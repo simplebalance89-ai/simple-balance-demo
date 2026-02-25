@@ -1149,6 +1149,7 @@ function updateModeCards() {
 /* ===== SPOTIFY ===== */
 let spotifyConnected = false;
 const JAW_SPOTIFY = '1228993875';
+const PETER_SPOTIFY = '31j6zvkbdfpegk3qxzyikrlyz57y';
 
 async function connectSpotify() {
     const btn = document.getElementById('spotifyConnectBtn');
@@ -1158,7 +1159,13 @@ async function connectSpotify() {
     btn.disabled = true;
     try {
         // Test connection by fetching Peter's playlists
-        const res = await fetch(`/api/spotify/user/${JAW_SPOTIFY}/playlists`);
+        let res = await fetch(`/api/spotify/user/${JAW_SPOTIFY}/playlists`);
+        let profileUsed = 'JAW';
+        if (!res.ok) {
+            // Fallback to Peter's profile
+            res = await fetch(`/api/spotify/user/${PETER_SPOTIFY}/playlists`);
+            profileUsed = 'Peter';
+        }
         if (!res.ok) throw new Error('Spotify not configured');
         const data = await res.json();
         spotifyConnected = true;
@@ -1169,7 +1176,7 @@ async function connectSpotify() {
         btn.onclick = null;
         document.getElementById('spotifyLibrary').style.display = 'block';
         document.getElementById('spotifyUserLabel').textContent = `${data.playlists?.length || 0} playlists loaded`;
-        renderPlaylists(data.playlists || [], 'JAW');
+        renderPlaylists(data.playlists || [], profileUsed);
     } catch (e) {
         btn.textContent = '❌ Connection Failed';
         btn.style.borderColor = '#C41E3A';
