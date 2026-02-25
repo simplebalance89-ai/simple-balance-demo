@@ -969,6 +969,11 @@
                 <div class="mc-name">Producer Tools</div>
                 <div class="mc-desc">Reference analysis, scales, drum grids</div>
             </div>
+            <div class="mode-card" data-mode="digestor" onclick="selectMode(this)">
+                <div class="mode-icon">🔬</div>
+                <div class="mc-name">Mix Digestor</div>
+                <div class="mc-desc">Extract tracklists from recorded DJ mixes</div>
+            </div>
             <div class="mode-card" data-mode="dashboard" onclick="selectMode(this)">
                 <div class="mode-icon">📊</div>
                 <div class="mc-name">Dashboard</div>
@@ -996,7 +1001,7 @@
     <div class="step" id="step4">
         <div class="capabilities-section">
             <h2>What Can It Do?</h2>
-            <p class="cap-sub">Simple Balance Music has 10 production modes built in</p>
+            <p class="cap-sub">Simple Balance Music has 11 production modes built in</p>
             <div class="cap-grid">
                 <div class="cap-item">
                     <div class="cap-icon-circle">🧠</div>
@@ -1029,6 +1034,10 @@
                 <div class="cap-item">
                     <div class="cap-icon-circle">💾</div>
                     <div class="cap-label">Mix<br>Archive</div>
+                </div>
+                <div class="cap-item">
+                    <div class="cap-icon-circle">🔬</div>
+                    <div class="cap-label">Mix<br>Digestor</div>
                 </div>
                 <div class="cap-item">
                     <div class="cap-icon-circle">🛠️</div>
@@ -1127,6 +1136,7 @@ const MODE_NAMES = {
     events: 'Events Radar',
     setbuilder: 'Set Builder',
     archive: 'Mix Archive',
+    digestor: 'Mix Digestor',
     tools: 'Producer Tools',
     dashboard: 'Dashboard'
 };
@@ -1278,7 +1288,7 @@ function buildDiscoveryExperience(name, modeName) {
     return `
         <div class="experience-title">
             <h2>${modeName}</h2>
-            <p>Pick a mood. Get curated recommendations.</p>
+            <p>Connect Spotify. Pick a mood. Get curated recommendations.</p>
         </div>
         <div class="mood-grid">
             <div class="mood-btn" onclick="showMoodTracks(this, 'release')">
@@ -1423,6 +1433,11 @@ const MODE_SAMPLES = {
         { icon: '🛠️', title: 'Reference track analysis', body: 'Analyze any track for production insights.', response: 'Reference analysis breaks down:<br><br>&bull; Frequency spectrum (sub, low, mid, high, air)<br>&bull; Stereo imaging per band<br>&bull; Dynamic range and compression<br>&bull; Arrangement structure (intro, build, drop, breakdown)<br>&bull; Sound design elements detected<br><br>Compare against your own tracks for A/B mastering.' },
         { icon: '🎼', title: 'Scale finder', body: 'Find the right scale for your melody.', response: 'Hum or play a melody. The scale finder identifies:<br>&bull; Root note<br>&bull; Scale type (major, minor, dorian, mixolydian, etc.)<br>&bull; Compatible chord progressions<br>&bull; Suggested bassline patterns<br><br>Works with audio input or MIDI.' },
         { icon: '🥁', title: 'Drum pattern grid', body: 'Build drum patterns with genre-specific templates.', response: 'Drum grid loaded with templates:<br><br>&bull; Four-on-the-floor (House)<br>&bull; Offbeat hi-hats (Techno)<br>&bull; Broken beat (UK Garage)<br>&bull; Polyrhythmic (Afro House)<br>&bull; Minimal (Deep Tech)<br><br>16-step sequencer with swing and velocity control.' }
+    ],
+    digestor: [
+        { icon: '🔬', title: 'Extract tracklist from a mix', body: 'Upload a recorded DJ mix and identify every track with timestamps.', response: 'Processing "Pete\'s Late Night Session 47"...<br><br>AudD Enterprise scan complete. <strong>22 tracks identified:</strong><br><br>&bull; 00:00 - Yotto &mdash; "Testarossa" (122 BPM, Gm)<br>&bull; 05:12 - Lane 8 &mdash; "Cherry Blossom" (119 BPM, Em)<br>&bull; 10:45 - Ben Bohmer &mdash; "Time" (120 BPM, Abm)<br>&bull; 16:30 - RUFUS DU SOL &mdash; "Innerbloom" (120 BPM, Cm)<br>&bull; ... 18 more tracks<br><br>Export as text, CSV, or send to Set Builder.' },
+        { icon: '📊', title: 'Tracklist analysis', body: 'Get BPM flow, key compatibility, and energy mapping from your extracted tracklist.', response: 'Tracklist analysis:<br><br>&bull; <strong>BPM range:</strong> 118-126 (smooth flow)<br>&bull; <strong>Key compatibility:</strong> 91% Camelot-adjacent<br>&bull; <strong>Energy curve:</strong> Gradual build, peak at track 14, smooth cooldown<br>&bull; <strong>Genre mix:</strong> 60% melodic house, 25% deep house, 15% progressive<br><br>Overall rating: 9.2/10 &mdash; excellent set structure.' },
+        { icon: '📋', title: 'Export & share', body: 'Export your tracklist to share on social media or archive.', response: 'Export options:<br><br>&bull; <strong>1001tracklists format</strong> &mdash; ready to submit<br>&bull; <strong>Plain text</strong> &mdash; for social posts<br>&bull; <strong>CSV</strong> &mdash; for spreadsheets and analysis<br>&bull; <strong>Set Builder import</strong> &mdash; rebuild the set with transition notes<br><br>Tracklist copied to clipboard.' }
     ],
     dashboard: [
         { icon: '📊', title: 'Your production stats', body: 'Track your workflow, output, and growth.', response: 'Dashboard shows your activity:<br><br>&bull; Tracks mastered this month: 12<br>&bull; Sets built: 3<br>&bull; Stems separated: 8<br>&bull; Discovery sessions: 15<br>&bull; Total production time: 47 hours<br><br>You\'re 23% more productive than last month.' },
