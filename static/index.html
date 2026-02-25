@@ -1787,6 +1787,222 @@ function uploadMix(input) {
     });
 }
 
+/* --- Events Radar --- */
+function buildEventsExperience(name, modeName) {
+    return `
+        <div class="experience-title">
+            <h2>${modeName}</h2>
+            <p>Enter a city. Find upcoming electronic music events.</p>
+        </div>
+        <div style="width:100%;max-width:600px;">
+            <div style="display:flex;gap:8px;margin-bottom:16px;">
+                <input type="text" id="eventsCity" placeholder="Enter a city (e.g. Chicago, Miami, Berlin)" style="flex:1;padding:12px 16px;border-radius:16px;border:2px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:#FFFEF7;font-family:'Nunito',sans-serif;font-size:0.9rem;outline:none;" onkeydown="if(event.key==='Enter')searchEvents()">
+                <button onclick="searchEvents()" class="nav-btn primary" style="font-size:0.85rem;padding:12px 24px;border-radius:16px;">Search</button>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+                <span class="prompt-chip" onclick="document.getElementById('eventsCity').value='Miami';searchEvents()">Miami</span>
+                <span class="prompt-chip" onclick="document.getElementById('eventsCity').value='Chicago';searchEvents()">Chicago</span>
+                <span class="prompt-chip" onclick="document.getElementById('eventsCity').value='Berlin';searchEvents()">Berlin</span>
+                <span class="prompt-chip" onclick="document.getElementById('eventsCity').value='Ibiza';searchEvents()">Ibiza</span>
+            </div>
+            <div id="eventsResults"></div>
+        </div>`;
+}
+
+const FALLBACK_EVENTS = [
+    { name: 'Deep House Collective', venue: 'The Underground', date: 'Mar 15, 2026', genre: 'Deep House', link: '#' },
+    { name: 'Techno Warehouse Sessions', venue: 'Industrial Park', date: 'Mar 22, 2026', genre: 'Techno', link: '#' },
+    { name: 'Melodic Sundays', venue: 'Rooftop Lounge', date: 'Mar 29, 2026', genre: 'Melodic House', link: '#' },
+    { name: 'Bass Culture Festival', venue: 'City Arena', date: 'Apr 5, 2026', genre: 'Bass House', link: '#' },
+    { name: 'Ambient Nights', venue: 'Gallery Space', date: 'Apr 12, 2026', genre: 'Ambient / Downtempo', link: '#' },
+    { name: 'Spring Awakening', venue: 'Waterfront Park', date: 'Apr 19, 2026', genre: 'Multi-genre', link: '#' }
+];
+
+function searchEvents() {
+    const city = document.getElementById('eventsCity').value.trim();
+    if (!city) return;
+    const container = document.getElementById('eventsResults');
+    container.innerHTML = '<div style="text-align:center;padding:20px;color:#D4A017;font-size:0.85rem;">Scanning events in ' + city + '...</div>';
+
+    fetch('/api/events', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({city: city})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.events && data.events.length > 0) {
+            renderEvents(container, data.events, city, true);
+        } else {
+            renderEvents(container, FALLBACK_EVENTS, city, false);
+        }
+    })
+    .catch(() => {
+        renderEvents(container, FALLBACK_EVENTS, city, false);
+    });
+}
+
+function renderEvents(container, events, city, isAI) {
+    const badge = isAI
+        ? '<span style="font-size:0.6rem;background:rgba(212,160,23,0.15);color:#D4A017;padding:4px 10px;border-radius:8px;letter-spacing:1px;text-transform:uppercase;">AI Generated</span>'
+        : '<span style="font-size:0.6rem;background:rgba(255,255,255,0.06);color:#666;padding:4px 10px;border-radius:8px;letter-spacing:1px;text-transform:uppercase;">Sample Data</span>';
+    container.innerHTML = `
+        <div style="text-align:center;margin-bottom:16px;">
+            <div style="font-family:'Playfair Display',serif;font-size:1.1rem;color:#FFE082;margin-bottom:6px;">Events near ${city}</div>
+            ${badge}
+        </div>
+        ${events.map(e => `
+            <div style="display:flex;align-items:center;gap:12px;padding:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;margin-bottom:8px;">
+                <div style="width:44px;height:44px;border-radius:8px;background:linear-gradient(135deg,rgba(196,30,58,0.2),rgba(196,30,58,0.05));display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;">📍</div>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:0.85rem;font-weight:700;color:#FFFEF7;">${e.name}</div>
+                    <div style="font-size:0.7rem;color:#8A7A5A;">${e.venue}</div>
+                    <div style="font-size:0.6rem;color:#666;margin-top:2px;">${e.genre}</div>
+                </div>
+                <div style="text-align:right;flex-shrink:0;">
+                    <div style="font-size:0.8rem;color:#D4A017;font-weight:700;">${e.date}</div>
+                </div>
+            </div>
+        `).join('')}`;
+}
+
+/* --- Set Builder --- */
+function buildSetBuilderExperience(name, modeName) {
+    return `
+        <div class="experience-title">
+            <h2>${modeName}</h2>
+            <p>Pick a vibe and duration. Get a full set structure.</p>
+        </div>
+        <div style="width:100%;max-width:600px;">
+            <div style="margin-bottom:16px;">
+                <div style="font-size:0.7rem;color:#8A7A5A;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Vibe</div>
+                <div class="mood-grid" id="vibeGrid">
+                    <div class="mood-btn" onclick="selectVibe(this, 'deep')" data-vibe="deep">
+                        <span class="mood-emoji">🌊</span>Deep
+                    </div>
+                    <div class="mood-btn" onclick="selectVibe(this, 'melodic')" data-vibe="melodic">
+                        <span class="mood-emoji">🎹</span>Melodic
+                    </div>
+                    <div class="mood-btn" onclick="selectVibe(this, 'peak time')" data-vibe="peak time">
+                        <span class="mood-emoji">🔥</span>Peak Time
+                    </div>
+                    <div class="mood-btn" onclick="selectVibe(this, 'journey')" data-vibe="journey">
+                        <span class="mood-emoji">🚀</span>Journey
+                    </div>
+                </div>
+            </div>
+            <div style="margin-bottom:16px;">
+                <div style="font-size:0.7rem;color:#8A7A5A;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Duration</div>
+                <div style="display:flex;gap:8px;">
+                    <button class="prompt-chip" onclick="selectDuration(this, '1 hour')" data-dur="1 hour">1 Hour</button>
+                    <button class="prompt-chip" onclick="selectDuration(this, '90 minutes')" data-dur="90 minutes">90 Min</button>
+                    <button class="prompt-chip" onclick="selectDuration(this, '2 hours')" data-dur="2 hours">2 Hours</button>
+                    <button class="prompt-chip" onclick="selectDuration(this, '3 hours')" data-dur="3 hours">3 Hours</button>
+                </div>
+            </div>
+            <div style="text-align:center;margin-bottom:16px;">
+                <button class="nav-btn primary" id="buildSetBtn" onclick="buildSet()" disabled>Build My Set</button>
+            </div>
+            <div id="setResults"></div>
+        </div>`;
+}
+
+let selectedVibe = null;
+let selectedDuration = null;
+
+function selectVibe(btn, vibe) {
+    document.querySelectorAll('#vibeGrid .mood-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedVibe = vibe;
+    checkSetReady();
+}
+
+function selectDuration(btn, dur) {
+    btn.parentElement.querySelectorAll('.prompt-chip').forEach(b => { b.style.borderColor = 'rgba(212,160,23,0.3)'; b.style.background = 'rgba(212,160,23,0.06)'; });
+    btn.style.borderColor = '#D4A017';
+    btn.style.background = 'rgba(212,160,23,0.15)';
+    selectedDuration = dur;
+    checkSetReady();
+}
+
+function checkSetReady() {
+    const btn = document.getElementById('buildSetBtn');
+    if (btn) btn.disabled = !(selectedVibe && selectedDuration);
+}
+
+const FALLBACK_SET = {
+    tracks: [
+        { position: 1, artist: 'Lane 8', title: 'Cherry Blossom', bpm: 119, key: 'Em', energy: 3, transition_note: 'Opener. Soft pads, set the tone.' },
+        { position: 2, artist: 'Ben Bohmer', title: 'Time', bpm: 120, key: 'Abm', energy: 4, transition_note: 'Gentle BPM lift. Blend the melodics.' },
+        { position: 3, artist: 'Yotto', title: 'Testarossa', bpm: 122, key: 'Gm', energy: 5, transition_note: 'Energy starts building. Driving groove.' },
+        { position: 4, artist: 'RUFUS DU SOL', title: 'Innerbloom', bpm: 120, key: 'Cm', energy: 6, transition_note: 'Peak approach. Long blend.' },
+        { position: 5, artist: 'Eric Prydz', title: 'Opus', bpm: 126, key: 'Dm', energy: 8, transition_note: 'Peak moment. Let it breathe.' },
+        { position: 6, artist: 'Solomun', title: 'Sais', bpm: 118, key: 'Cm', energy: 5, transition_note: 'Cool down. Pull energy back.' },
+        { position: 7, artist: 'Kidnap', title: 'Sirens', bpm: 122, key: 'Fm', energy: 4, transition_note: 'Gentle close. Atmospheric.' },
+        { position: 8, artist: 'Catching Flies', title: 'Satisfied', bpm: 116, key: 'Am', energy: 3, transition_note: 'Final track. Let it fade.' }
+    ]
+};
+
+function buildSet() {
+    if (!selectedVibe || !selectedDuration) return;
+    const container = document.getElementById('setResults');
+    container.innerHTML = '<div style="text-align:center;padding:20px;color:#D4A017;font-size:0.85rem;">Building your ' + selectedDuration + ' ' + selectedVibe + ' set...</div>';
+
+    fetch('/api/setbuilder', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({vibe: selectedVibe, duration: selectedDuration})
+    })
+    .then(r => r.json())
+    .then(data => {
+        const tracks = data.set && data.set.tracks && data.set.tracks.length > 0 ? data.set.tracks : null;
+        if (tracks) {
+            renderSet(container, tracks, true);
+        } else {
+            renderSet(container, FALLBACK_SET.tracks, false);
+        }
+    })
+    .catch(() => {
+        renderSet(container, FALLBACK_SET.tracks, false);
+    });
+}
+
+function renderSet(container, tracks, isAI) {
+    const badge = isAI
+        ? '<span style="font-size:0.6rem;background:rgba(212,160,23,0.15);color:#D4A017;padding:4px 10px;border-radius:8px;letter-spacing:1px;text-transform:uppercase;">AI Generated</span>'
+        : '<span style="font-size:0.6rem;background:rgba(255,255,255,0.06);color:#666;padding:4px 10px;border-radius:8px;letter-spacing:1px;text-transform:uppercase;">Sample Set</span>';
+
+    container.innerHTML = `
+        <div style="text-align:center;margin-bottom:16px;">
+            <div style="font-family:'Playfair Display',serif;font-size:1.1rem;color:#FFE082;margin-bottom:6px;">${tracks.length}-Track Set</div>
+            ${badge}
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:4px;height:60px;margin-bottom:16px;padding:0 8px;">
+            ${tracks.map(t => {
+                const pct = ((t.energy || 5) / 10) * 100;
+                const color = t.energy >= 7 ? '#C41E3A' : t.energy >= 4 ? '#D4A017' : '#4CAF50';
+                return '<div style="flex:1;background:' + color + ';border-radius:4px 4px 0 0;height:' + pct + '%;opacity:0.7;transition:height 0.5s ease;" title="Track ' + t.position + ': Energy ' + t.energy + '/10"></div>';
+            }).join('')}
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:0.55rem;color:#666;margin-bottom:16px;padding:0 8px;">
+            <span>LOW ENERGY</span><span>ENERGY CURVE</span><span>HIGH ENERGY</span>
+        </div>
+        ${tracks.map(t => `
+            <div style="display:flex;align-items:center;gap:12px;padding:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;margin-bottom:8px;">
+                <div style="width:32px;height:32px;border-radius:50%;background:rgba(212,160,23,0.1);display:flex;align-items:center;justify-content:center;font-size:0.75rem;color:#D4A017;font-weight:800;flex-shrink:0;">${t.position}</div>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:0.85rem;font-weight:700;color:#FFFEF7;">${t.artist} — ${t.title}</div>
+                    <div style="font-size:0.65rem;color:#8A7A5A;margin-top:2px;font-style:italic;">${t.transition_note || ''}</div>
+                </div>
+                <div style="text-align:right;flex-shrink:0;">
+                    <div style="font-size:0.75rem;color:#D4A017;font-weight:700;">${t.bpm} BPM</div>
+                    <div style="font-size:0.65rem;color:#8A7A5A;">${t.key}</div>
+                    <div style="font-size:0.6rem;color:#666;">Energy: ${t.energy}/10</div>
+                </div>
+            </div>
+        `).join('')}`;
+}
+
 /* --- JAW Free-type input --- */
 function sendJAWFreeInput() {
     const input = document.getElementById('jawInput');
@@ -1821,6 +2037,204 @@ function sendJAWFreeInput() {
             el.innerHTML = `<div class="msg-label">J.A.W.</div>Connection error. Try again.`;
             el.removeAttribute('id');
         }
+    });
+}
+
+/* --- Mix Archive (Real API) --- */
+function buildArchiveExperience(name, modeName) {
+    return `
+        <div class="experience-title">
+            <h2>${modeName}</h2>
+            <p>Upload mixes to your archive. View your collection.</p>
+        </div>
+        <div style="width:100%;max-width:600px;">
+            <div style="background:rgba(255,255,255,0.03);border:2px dashed rgba(212,160,23,0.3);border-radius:16px;padding:32px;text-align:center;margin-bottom:16px;cursor:pointer;" onclick="document.getElementById('archiveFile').click()" id="archiveDropZone">
+                <div style="font-size:2.5rem;margin-bottom:8px;">💾</div>
+                <div style="font-family:'Playfair Display',serif;font-size:1.1rem;color:#FFE082;margin-bottom:4px;">Upload a mix to archive</div>
+                <div style="font-size:0.75rem;color:#8A7A5A;">MP3, WAV, M4A, FLAC</div>
+                <input type="file" id="archiveFile" accept="audio/*" style="display:none" onchange="uploadArchive(this)">
+            </div>
+            <div id="archiveUploadStatus" style="display:none;text-align:center;padding:12px;font-size:0.85rem;color:#D4A017;"></div>
+            <div id="archiveListSection">
+                <div style="font-family:'Playfair Display',serif;font-size:0.95rem;color:#FFE082;margin-bottom:10px;">Your Archive</div>
+                <div id="archiveList" style="font-size:0.8rem;color:#8A7A5A;">Loading...</div>
+            </div>
+        </div>`;
+}
+
+function uploadArchive(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const status = document.getElementById('archiveUploadStatus');
+    status.style.display = 'block';
+    status.textContent = 'Uploading "' + file.name + '"...';
+    status.style.color = '#D4A017';
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    fetch('/api/archive/upload', { method: 'POST', body: formData })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            status.textContent = 'Error: ' + data.error;
+            status.style.color = '#C41E3A';
+        } else {
+            status.textContent = 'Archived! ' + data.entry.filename + ' (' + data.entry.size_mb + ' MB)';
+            status.style.color = '#4CAF50';
+            loadArchiveList();
+        }
+        input.value = '';
+    })
+    .catch(err => {
+        status.textContent = 'Upload failed: ' + err.message;
+        status.style.color = '#C41E3A';
+    });
+}
+
+function loadArchiveList() {
+    const list = document.getElementById('archiveList');
+    if (!list) return;
+    fetch('/api/archive')
+    .then(r => r.json())
+    .then(data => {
+        if (!data.mixes || data.mixes.length === 0) {
+            list.innerHTML = '<div style="color:#666;font-size:0.78rem;">No mixes archived yet. Upload one above.</div>';
+            return;
+        }
+        list.innerHTML = data.mixes.map(m => `
+            <div style="display:flex;align-items:center;gap:12px;padding:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;margin-bottom:8px;">
+                <div style="width:40px;height:40px;border-radius:8px;background:rgba(212,160,23,0.1);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;">💾</div>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:0.85rem;font-weight:700;color:#FFFEF7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${m.filename}</div>
+                    <div style="font-size:0.65rem;color:#8A7A5A;">${m.size_mb} MB &bull; ${m.uploaded_at}</div>
+                </div>
+            </div>
+        `).join('');
+    })
+    .catch(() => {
+        list.innerHTML = '<div style="color:#C41E3A;font-size:0.78rem;">Failed to load archive.</div>';
+    });
+}
+
+/* --- Producer Tools (Real API) --- */
+function buildToolsExperience(name, modeName) {
+    return `
+        <div class="experience-title">
+            <h2>${modeName}</h2>
+            <p>Ask any music theory or production question.</p>
+        </div>
+        <div style="width:100%;max-width:600px;">
+            <div style="display:flex;gap:8px;margin-bottom:16px;">
+                <input type="text" id="toolsInput" placeholder="e.g. What scale works for dark techno in D minor?" onkeydown="if(event.key==='Enter')sendToolsQuery()" style="flex:1;padding:12px 16px;border-radius:16px;border:2px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:#FFFEF7;font-family:'Nunito',sans-serif;font-size:0.9rem;outline:none;">
+                <button onclick="sendToolsQuery()" style="padding:12px 20px;border-radius:16px;border:none;background:linear-gradient(135deg,#D4A017,#B8860B);color:#0D0D1A;font-weight:800;cursor:pointer;font-family:'Nunito',sans-serif;">Ask</button>
+            </div>
+            <div class="prompt-chips" style="margin-bottom:16px;">
+                <div class="prompt-chip" onclick="fillToolsQuery(this, 'What scale works for dark techno in D minor?')">Dark techno scales</div>
+                <div class="prompt-chip" onclick="fillToolsQuery(this, 'Best chord progression for melodic house in A minor?')">Melodic house chords</div>
+                <div class="prompt-chip" onclick="fillToolsQuery(this, 'How do I create a Reese bass sound?')">Reese bass design</div>
+                <div class="prompt-chip" onclick="fillToolsQuery(this, 'What frequencies should I cut for a clean mix?')">Mix EQ tips</div>
+            </div>
+            <div id="toolsResult" style="display:none;"></div>
+        </div>`;
+}
+
+function fillToolsQuery(chip, query) {
+    document.getElementById('toolsInput').value = query;
+    sendToolsQuery();
+}
+
+function sendToolsQuery() {
+    const input = document.getElementById('toolsInput');
+    const query = input.value.trim();
+    if (!query) return;
+
+    const result = document.getElementById('toolsResult');
+    result.style.display = 'block';
+    result.innerHTML = '<div style="text-align:center;padding:16px;color:#D4A017;font-size:0.85rem;">Analyzing...</div>';
+
+    fetch('/api/tools/analyze', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({query: query})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            result.innerHTML = '<div style="padding:16px;color:#C41E3A;font-size:0.85rem;">Error: ' + data.error + '</div>';
+            return;
+        }
+        const text = (data.response || 'No response').replace(/\n/g, '<br>');
+        result.innerHTML = `
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:16px;">
+                <div style="font-size:0.65rem;color:#D4A017;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Music Theory AI</div>
+                <div style="font-size:0.85rem;color:#E0C8A0;line-height:1.6;">${text}</div>
+            </div>`;
+    })
+    .catch(err => {
+        result.innerHTML = '<div style="padding:16px;color:#C41E3A;font-size:0.85rem;">Connection error. Try again.</div>';
+    });
+}
+
+/* --- Dashboard (Real API) --- */
+function buildDashboardExperience(name, modeName) {
+    return `
+        <div class="experience-title">
+            <h2>${modeName}</h2>
+            <p>Your production stats at a glance.</p>
+        </div>
+        <div style="width:100%;max-width:600px;">
+            <div id="dashboardGrid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
+                <div class="analysis-card">
+                    <div class="ac-label">Tracks Mastered</div>
+                    <div class="ac-value" id="val-mastered">--</div>
+                </div>
+                <div class="analysis-card">
+                    <div class="ac-label">Sets Built</div>
+                    <div class="ac-value" id="val-sets">--</div>
+                </div>
+                <div class="analysis-card">
+                    <div class="ac-label">Stems Separated</div>
+                    <div class="ac-value" id="val-stems">--</div>
+                </div>
+                <div class="analysis-card">
+                    <div class="ac-label">Mixes Archived</div>
+                    <div class="ac-value" id="val-archive">--</div>
+                </div>
+                <div class="analysis-card" style="grid-column:span 2;">
+                    <div class="ac-label">Discovery Sessions</div>
+                    <div class="ac-value" id="val-discovery">--</div>
+                </div>
+            </div>
+        </div>`;
+}
+
+function loadDashboardStats() {
+    fetch('/api/dashboard')
+    .then(r => r.json())
+    .then(data => {
+        const animate = (id, target) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            let current = 0;
+            const step = Math.max(1, Math.ceil(target / 20));
+            const interval = setInterval(() => {
+                current += step;
+                if (current >= target) { current = target; clearInterval(interval); }
+                el.textContent = current;
+            }, 40);
+        };
+        animate('val-mastered', data.tracks_mastered || 0);
+        animate('val-sets', data.sets_built || 0);
+        animate('val-stems', data.stems_separated || 0);
+        animate('val-archive', data.mixes_archived || 0);
+        animate('val-discovery', data.discovery_sessions || 0);
+    })
+    .catch(() => {
+        ['val-mastered','val-sets','val-stems','val-archive','val-discovery'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = '?';
+        });
     });
 }
 </script>
