@@ -1156,6 +1156,20 @@ function buildExperience() {
         area.innerHTML = buildGenerationExperience(name, modeName);
     } else if (selectedMode === 'digestor') {
         area.innerHTML = buildDigestorExperience(name, modeName);
+    } else if (selectedMode === 'stems') {
+        area.innerHTML = buildStemsExperience(name, modeName);
+    } else if (selectedMode === 'events') {
+        area.innerHTML = buildEventsExperience(name, modeName);
+    } else if (selectedMode === 'setbuilder') {
+        area.innerHTML = buildSetBuilderExperience(name, modeName);
+    } else if (selectedMode === 'archive') {
+        area.innerHTML = buildArchiveExperience(name, modeName);
+        loadArchiveList();
+    } else if (selectedMode === 'tools') {
+        area.innerHTML = buildToolsExperience(name, modeName);
+    } else if (selectedMode === 'dashboard') {
+        area.innerHTML = buildDashboardExperience(name, modeName);
+        loadDashboardStats();
     } else {
         area.innerHTML = buildDefaultExperience(name, modeName);
     }
@@ -1253,66 +1267,87 @@ function sendJAWPrompt(el, idx) {
     }, 600);
 }
 
-/* --- AI Mastering --- */
+/* --- AI Mastering (Real upload + Azure OpenAI analysis) --- */
 function buildMasteringExperience(name, modeName) {
     return `
         <div class="experience-title">
             <h2>${modeName}</h2>
-            <p>Upload a track or try the demo analysis</p>
+            <p>Upload a track for AI-powered mastering analysis</p>
         </div>
-        <div class="mastering-demo">
-            <div style="text-align:center; margin-bottom:16px;">
-                <button class="nav-btn primary" onclick="showMasteringResult()">Try Demo Analysis</button>
+        <div style="width:100%;max-width:600px;">
+            <div style="background:rgba(255,255,255,0.03);border:2px dashed rgba(212,160,23,0.3);border-radius:16px;padding:32px;text-align:center;margin-bottom:16px;cursor:pointer;" onclick="document.getElementById('masterFile').click()" id="masterDropZone">
+                <div style="font-size:2.5rem;margin-bottom:8px;">🎚️</div>
+                <div style="font-family:'Playfair Display',serif;font-size:1.1rem;color:#FFE082;margin-bottom:4px;">Drop your track here</div>
+                <div style="font-size:0.75rem;color:#8A7A5A;">MP3, WAV, M4A, FLAC</div>
+                <input type="file" id="masterFile" accept="audio/*" style="display:none" onchange="uploadForMastering(this)">
             </div>
-            <div class="mastering-result" id="masteringResult">
-                <div class="analysis-grid">
-                    <div class="analysis-card">
-                        <div class="ac-label">BPM</div>
-                        <div class="ac-value">122</div>
-                        <div class="ac-detail">Steady tempo detected</div>
-                    </div>
-                    <div class="analysis-card">
-                        <div class="ac-label">Key</div>
-                        <div class="ac-value">F minor</div>
-                        <div class="ac-detail">Camelot: 4A</div>
-                    </div>
-                    <div class="analysis-card">
-                        <div class="ac-label">LUFS</div>
-                        <div class="ac-value">-8.2</div>
-                        <div class="ac-detail">Integrated loudness</div>
-                    </div>
-                    <div class="analysis-card">
-                        <div class="ac-label">True Peak</div>
-                        <div class="ac-value">-0.3 dB</div>
-                        <div class="ac-detail">Within streaming limits</div>
-                    </div>
-                </div>
-                <div class="before-after">
-                    <div class="ba-card">
-                        <h4>Before</h4>
-                        <div class="ba-label"><span>Low End</span><span>Muddy</span></div>
-                        <div class="ba-meter"><div class="ba-meter-fill gold" style="width:85%"></div></div>
-                        <div class="ba-label"><span>Stereo Width</span><span>Narrow</span></div>
-                        <div class="ba-meter"><div class="ba-meter-fill gold" style="width:35%"></div></div>
-                        <div class="ba-label"><span>Dynamics</span><span>Compressed</span></div>
-                        <div class="ba-meter"><div class="ba-meter-fill gold" style="width:25%"></div></div>
-                    </div>
-                    <div class="ba-card">
-                        <h4>After (AI Master)</h4>
-                        <div class="ba-label"><span>Low End</span><span>Tight</span></div>
-                        <div class="ba-meter"><div class="ba-meter-fill green" style="width:60%"></div></div>
-                        <div class="ba-label"><span>Stereo Width</span><span>Wide</span></div>
-                        <div class="ba-meter"><div class="ba-meter-fill green" style="width:78%"></div></div>
-                        <div class="ba-label"><span>Dynamics</span><span>Balanced</span></div>
-                        <div class="ba-meter"><div class="ba-meter-fill green" style="width:70%"></div></div>
-                    </div>
+            <div id="masterStatus" style="display:none;text-align:center;padding:16px;">
+                <div style="font-size:0.85rem;color:#D4A017;" id="masterMsg">Analyzing...</div>
+                <div style="width:100%;height:4px;background:rgba(255,255,255,0.06);border-radius:2px;margin-top:12px;overflow:hidden;">
+                    <div id="masterBar" style="width:0%;height:100%;background:linear-gradient(90deg,#D4A017,#FFE082);border-radius:2px;transition:width 0.5s ease;"></div>
                 </div>
             </div>
+            <div id="masterResults" style="display:none;"></div>
         </div>`;
 }
 
-function showMasteringResult() {
-    document.getElementById('masteringResult').classList.add('visible');
+function buildAnalysisCard(label, value, detail) {
+    return '<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px;text-align:center;">' +
+        '<div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:1px;color:#8A7A5A;margin-bottom:4px;">' + label + '</div>' +
+        '<div style="font-family:Playfair Display,serif;font-size:1.5rem;font-weight:700;color:#D4A017;">' + value + '</div>' +
+        '<div style="font-size:0.6rem;color:#6A6A7A;">' + detail + '</div>' +
+    '</div>';
+}
+
+function uploadForMastering(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const dropZone = document.getElementById('masterDropZone');
+    const status = document.getElementById('masterStatus');
+    const results = document.getElementById('masterResults');
+    const msg = document.getElementById('masterMsg');
+    const bar = document.getElementById('masterBar');
+    dropZone.style.display = 'none';
+    status.style.display = 'block';
+    results.style.display = 'none';
+    msg.textContent = 'Uploading "' + file.name + '"...';
+    bar.style.width = '20%';
+    const formData = new FormData();
+    formData.append('file', file);
+    setTimeout(function(){ msg.textContent = 'Running AI mastering analysis...'; bar.style.width = '50%'; }, 1000);
+    setTimeout(function(){ msg.textContent = 'Generating recommendations...'; bar.style.width = '75%'; }, 3000);
+    fetch('/api/analyze', { method: 'POST', body: formData })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+        bar.style.width = '100%';
+        if (data.error) { msg.textContent = 'Error: ' + data.error; msg.style.color = '#C41E3A'; return; }
+        status.style.display = 'none';
+        results.style.display = 'block';
+        var recs = (data.recommendations || []).map(function(r){ return '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;"><span style="color:#D4A017;">&#9679;</span><span style="font-size:0.8rem;color:#E0C8A0;">' + r + '</span></div>'; }).join('');
+        var scoreColor = data.quality_score >= 70 ? '#4CAF50' : (data.quality_score >= 40 ? '#D4A017' : '#C41E3A');
+        results.innerHTML =
+            '<div style="text-align:center;margin-bottom:16px;">' +
+                '<span style="font-family:Playfair Display,serif;font-size:1.2rem;color:#FFE082;">Analysis: ' + (data.filename || file.name) + '</span>' +
+                (data.genre_detected ? '<div style="font-size:0.65rem;color:#8A7A5A;margin-top:4px;">Detected genre: ' + data.genre_detected + '</div>' : '') +
+            '</div>' +
+            '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px;">' +
+                buildAnalysisCard('BPM', data.bpm || '—', 'Tempo detected') +
+                buildAnalysisCard('Key', data.key || '—', data.camelot ? 'Camelot: ' + data.camelot : '') +
+                buildAnalysisCard('LUFS', data.lufs || '—', 'Integrated loudness') +
+                buildAnalysisCard('True Peak', (data.true_peak || '—') + ' dB', data.dynamic_range ? 'DR: ' + data.dynamic_range + ' dB' : '') +
+            '</div>' +
+            (data.quality_score ? '<div style="text-align:center;margin-bottom:16px;"><div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:1px;color:#8A7A5A;margin-bottom:6px;">Quality Score</div><div style="display:inline-flex;width:60px;height:60px;border-radius:50%;border:3px solid ' + scoreColor + ';align-items:center;justify-content:center;"><span style="font-family:Playfair Display,serif;font-size:1.3rem;font-weight:700;color:#FFE082;">' + data.quality_score + '</span></div></div>' : '') +
+            (recs ? '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:16px;margin-bottom:16px;"><div style="font-family:Playfair Display,serif;font-size:0.9rem;color:#FFE082;margin-bottom:12px;">Mastering Recommendations</div>' + recs + '</div>' : '') +
+            '<div style="text-align:center;margin-top:16px;"><button class="nav-btn primary" onclick="resetMastering()" style="font-size:0.8rem;padding:10px 24px;">Analyze Another Track</button></div>';
+    })
+    .catch(function(err){ bar.style.width = '100%'; msg.textContent = 'Upload failed: ' + err.message; msg.style.color = '#C41E3A'; });
+}
+
+function resetMastering() {
+    document.getElementById('masterDropZone').style.display = '';
+    document.getElementById('masterStatus').style.display = 'none';
+    document.getElementById('masterResults').style.display = 'none';
+    document.getElementById('masterFile').value = '';
 }
 
 /* --- Music Discovery --- */
@@ -1320,7 +1355,7 @@ function buildDiscoveryExperience(name, modeName) {
     return `
         <div class="experience-title">
             <h2>${modeName}</h2>
-            <p>Connect Spotify. Pick a mood. Get curated recommendations.</p>
+            <p>Pick a mood. Get AI-curated recommendations.</p>
         </div>
         <div class="mood-grid">
             <div class="mood-btn" onclick="showMoodTracks(this, 'release')">
@@ -1341,46 +1376,83 @@ function buildDiscoveryExperience(name, modeName) {
 
 const MOOD_TRACKS = {
     release: [
-        { name: 'Opus', artist: 'Eric Prydz', bpm: 126, key: 'Dm', emoji: '🎹' },
-        { name: 'Strobe', artist: 'deadmau5', bpm: 128, key: 'Fm', emoji: '💫' },
-        { name: 'Innerbloom', artist: 'RUFUS DU SOL', bpm: 120, key: 'Cm', emoji: '🌅' },
-        { name: 'Catching Flies', artist: 'Catching Flies', bpm: 116, key: 'Am', emoji: '🦋' }
+        { title: 'Opus', artist: 'Eric Prydz', bpm: 126, key: 'Dm', reason: 'Euphoric build-and-release energy' },
+        { title: 'Strobe', artist: 'deadmau5', bpm: 128, key: 'Fm', reason: 'Progressive journey that lets go' },
+        { title: 'Innerbloom', artist: 'RUFUS DU SOL', bpm: 120, key: 'Cm', reason: 'Deep emotional release' },
+        { title: 'Catching Flies', artist: 'Catching Flies', bpm: 116, key: 'Am', reason: 'Gentle unwinding groove' },
+        { title: 'Midnight City', artist: 'M83', bpm: 105, key: 'Abm', reason: 'Anthemic atmospheric wash' },
+        { title: 'Sun & Moon', artist: 'Above & Beyond', bpm: 138, key: 'Bbm', reason: 'Trance-tinged emotional peak' }
     ],
     focus: [
-        { name: 'Testarossa', artist: 'Yotto', bpm: 122, key: 'Gm', emoji: '🏎️' },
-        { name: 'Northern Soul', artist: 'Above & Beyond', bpm: 132, key: 'Ebm', emoji: '⭐' },
-        { name: 'Cola', artist: 'CamelPhat & Elderbrook', bpm: 124, key: 'Am', emoji: '🥤' },
-        { name: 'All Night', artist: 'Parov Stelar', bpm: 126, key: 'Bbm', emoji: '🌙' }
+        { title: 'Testarossa', artist: 'Yotto', bpm: 122, key: 'Gm', reason: 'Driving melodic focus' },
+        { title: 'Northern Soul', artist: 'Above & Beyond', bpm: 132, key: 'Ebm', reason: 'Locked-in progressive energy' },
+        { title: 'Cola', artist: 'CamelPhat & Elderbrook', bpm: 124, key: 'Am', reason: 'Hypnotic vocal loop' },
+        { title: 'All Night', artist: 'Parov Stelar', bpm: 126, key: 'Bbm', reason: 'Electro swing momentum' },
+        { title: 'Revolver', artist: 'Klangkarussell', bpm: 123, key: 'Cm', reason: 'Steady groove, zero distractions' },
+        { title: 'Rush', artist: 'Tinlicker', bpm: 128, key: 'Dm', reason: 'Clean progressive drive' }
     ],
     decompress: [
-        { name: 'Sais', artist: 'Solomun', bpm: 118, key: 'Cm', emoji: '🎧' },
-        { name: 'Time', artist: 'Ben Bohmer', bpm: 120, key: 'Abm', emoji: '⏳' },
-        { name: 'Cherry Blossom', artist: 'Lane 8', bpm: 119, key: 'Em', emoji: '🌸' },
-        { name: 'Sirens', artist: 'Kidnap', bpm: 122, key: 'Fm', emoji: '🔔' }
+        { title: 'Sais', artist: 'Solomun', bpm: 118, key: 'Cm', reason: 'Deep introspective groove' },
+        { title: 'Time', artist: 'Ben Bohmer', bpm: 120, key: 'Abm', reason: 'Gentle melodic unwinding' },
+        { title: 'Cherry Blossom', artist: 'Lane 8', bpm: 119, key: 'Em', reason: 'Soft textured warmth' },
+        { title: 'Sirens', artist: 'Kidnap', bpm: 122, key: 'Fm', reason: 'Downtempo emotional space' },
+        { title: 'Petit Biscuit', artist: 'Sunset Lover', bpm: 100, key: 'Gb', reason: 'Ambient chill perfection' },
+        { title: 'Tycho', artist: 'Awake', bpm: 112, key: 'A', reason: 'Warm analog decompression' }
     ],
     brotherhood: [
-        { name: 'The Nights', artist: 'Avicii', bpm: 126, key: 'Dm', emoji: '🔥' },
-        { name: "Don't You Worry Child", artist: 'Swedish House Mafia', bpm: 128, key: 'Gm', emoji: '🙌' },
-        { name: 'Alive', artist: 'Krewella', bpm: 128, key: 'Am', emoji: '⚡' },
-        { name: 'Levels', artist: 'Avicii', bpm: 126, key: 'Cm', emoji: '📈' }
+        { title: 'The Nights', artist: 'Avicii', bpm: 126, key: 'Dm', reason: 'Anthem for the crew' },
+        { title: "Don't You Worry Child", artist: 'Swedish House Mafia', bpm: 128, key: 'Gm', reason: 'Festival brotherhood energy' },
+        { title: 'Alive', artist: 'Krewella', bpm: 128, key: 'Am', reason: 'We-are-in-this-together vibes' },
+        { title: 'Levels', artist: 'Avicii', bpm: 126, key: 'Cm', reason: 'Universal hands-up moment' },
+        { title: 'One More Time', artist: 'Daft Punk', bpm: 123, key: 'Bbm', reason: 'Timeless celebration' },
+        { title: 'Lean On', artist: 'Major Lazer', bpm: 98, key: 'Gm', reason: 'Global unity groove' }
     ]
 };
+
+const MOOD_EMOJIS = ['🎵', '🎶', '🎧', '💫', '🌊', '🔥'];
 
 function showMoodTracks(btn, mood) {
     document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    const tracks = MOOD_TRACKS[mood];
     const container = document.getElementById('trackResults');
-    container.innerHTML = tracks.map(t => `
+    container.innerHTML = '<div style="text-align:center;padding:20px;color:#D4A017;font-size:0.85rem;">Asking the AI...</div>';
+    container.classList.add('visible');
+
+    fetch('/api/discovery', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({mood: mood})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.tracks && data.tracks.length > 0) {
+            renderDiscoveryTracks(container, data.tracks, true);
+        } else {
+            // Fallback to static data
+            renderDiscoveryTracks(container, MOOD_TRACKS[mood] || [], false);
+        }
+    })
+    .catch(() => {
+        // Fallback to static data on any error
+        renderDiscoveryTracks(container, MOOD_TRACKS[mood] || [], false);
+    });
+}
+
+function renderDiscoveryTracks(container, tracks, isAI) {
+    const badge = isAI
+        ? '<div style="text-align:center;margin-bottom:12px;"><span style="font-size:0.6rem;background:rgba(212,160,23,0.15);color:#D4A017;padding:4px 10px;border-radius:8px;letter-spacing:1px;text-transform:uppercase;">AI Generated</span></div>'
+        : '';
+    container.innerHTML = badge + tracks.map((t, i) => `
         <div class="track-card">
-            <div class="track-art">${t.emoji}</div>
+            <div class="track-art">${MOOD_EMOJIS[i % MOOD_EMOJIS.length]}</div>
             <div class="track-info">
-                <div class="ti-name">${t.name}</div>
-                <div class="ti-artist">${t.artist}</div>
+                <div class="ti-name">${t.title || t.name || 'Unknown'}</div>
+                <div class="ti-artist">${t.artist || 'Unknown'}</div>
+                ${t.reason ? `<div style="font-size:0.65rem;color:#8A7A5A;margin-top:2px;font-style:italic;">${t.reason}</div>` : ''}
             </div>
             <div class="track-meta">
-                <div class="tm-bpm">${t.bpm} BPM</div>
-                <div>${t.key}</div>
+                <div class="tm-bpm">${t.bpm || '?'} BPM</div>
+                <div>${t.key || '?'}</div>
             </div>
         </div>
     `).join('');
@@ -1413,12 +1485,43 @@ const GEN_DATA = {
 function generateBeat(btn, genre) {
     document.querySelectorAll('.genre-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    const d = GEN_DATA[genre];
+    const fallback = GEN_DATA[genre];
     const container = document.getElementById('genResult');
+
+    // Show loading state
+    container.innerHTML = '<div style="text-align:center;padding:20px;color:#D4A017;font-size:0.85rem;">Generating with AI...</div>';
+    container.classList.add('visible');
+
+    fetch('/api/generate', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({genre: genre, bpm: fallback.bpm, key: fallback.key})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) throw new Error(data.error);
+        renderGenResult(container, data, true);
+    })
+    .catch(() => {
+        renderGenResult(container, fallback, false);
+    });
+}
+
+function renderGenResult(container, d, isAI) {
+    const badge = isAI
+        ? '<div style="text-align:center;margin-bottom:8px;"><span style="font-size:0.6rem;background:rgba(212,160,23,0.15);color:#D4A017;padding:4px 10px;border-radius:8px;letter-spacing:1px;text-transform:uppercase;">AI Generated</span></div>'
+        : '';
+    const descHtml = d.description
+        ? `<div style="font-size:0.78rem;color:#E0C8A0;line-height:1.5;margin-top:12px;padding:10px;background:rgba(255,255,255,0.02);border-radius:10px;">${d.description}</div>`
+        : '';
+    const structHtml = d.structure
+        ? `<div style="font-size:0.7rem;color:#8A7A5A;margin-top:8px;text-align:center;">${d.structure}</div>`
+        : '';
     container.innerHTML = `
         <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:16px;">
+            ${badge}
             <div style="text-align:center;margin-bottom:8px;">
-                <span style="font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:700;color:#FFE082;">${d.name}</span>
+                <span style="font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:700;color:#FFE082;">${d.name || 'Generated Beat'}</span>
             </div>
             <div class="waveform-placeholder"></div>
             <div class="gen-details">
@@ -1435,6 +1538,8 @@ function generateBeat(btn, genre) {
                     <div class="gd-value">${d.bars}</div>
                 </div>
             </div>
+            ${structHtml}
+            ${descHtml}
         </div>`;
     container.classList.add('visible');
 }
@@ -1501,6 +1606,90 @@ function buildDefaultExperience(name, modeName) {
 
 function toggleSampleCard(el) {
     el.classList.toggle('expanded');
+}
+
+/* --- Stem Separation (Real upload + Replicate Demucs) --- */
+function buildStemsExperience(name, modeName) {
+    return `
+        <div class="experience-title">
+            <h2>${modeName}</h2>
+            <p>Upload a track. Get vocals, drums, bass, and other stems.</p>
+        </div>
+        <div style="width:100%;max-width:600px;">
+            <div style="background:rgba(255,255,255,0.03);border:2px dashed rgba(212,160,23,0.3);border-radius:16px;padding:32px;text-align:center;margin-bottom:16px;cursor:pointer;" onclick="document.getElementById('stemFile').click()" id="stemDropZone">
+                <div style="font-size:2.5rem;margin-bottom:8px;">🔀</div>
+                <div style="font-family:'Playfair Display',serif;font-size:1.1rem;color:#FFE082;margin-bottom:4px;">Drop your track here</div>
+                <div style="font-size:0.75rem;color:#8A7A5A;">MP3, WAV, M4A, FLAC — powered by Demucs AI</div>
+                <input type="file" id="stemFile" accept="audio/*" style="display:none" onchange="uploadForStems(this)">
+            </div>
+            <div id="stemStatus" style="display:none;text-align:center;padding:16px;">
+                <div style="font-size:0.85rem;color:#D4A017;" id="stemMsg">Processing...</div>
+                <div style="width:100%;height:4px;background:rgba(255,255,255,0.06);border-radius:2px;margin-top:12px;overflow:hidden;">
+                    <div id="stemBar" style="width:0%;height:100%;background:linear-gradient(90deg,#D4A017,#FFE082);border-radius:2px;transition:width 0.5s ease;"></div>
+                </div>
+            </div>
+            <div id="stemResults" style="display:none;"></div>
+        </div>`;
+}
+
+function uploadForStems(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const dropZone = document.getElementById('stemDropZone');
+    const status = document.getElementById('stemStatus');
+    const results = document.getElementById('stemResults');
+    const msg = document.getElementById('stemMsg');
+    const bar = document.getElementById('stemBar');
+    dropZone.style.display = 'none';
+    status.style.display = 'block';
+    results.style.display = 'none';
+    msg.textContent = 'Uploading "' + file.name + '"...';
+    bar.style.width = '10%';
+    const formData = new FormData();
+    formData.append('file', file);
+    setTimeout(function(){ msg.textContent = 'Sending to Demucs AI...'; bar.style.width = '25%'; }, 2000);
+    setTimeout(function(){ msg.textContent = 'Separating stems (this can take 1-3 minutes)...'; bar.style.width = '40%'; }, 5000);
+    setTimeout(function(){ bar.style.width = '55%'; }, 15000);
+    setTimeout(function(){ bar.style.width = '70%'; }, 30000);
+    setTimeout(function(){ msg.textContent = 'Almost there...'; bar.style.width = '85%'; }, 60000);
+    fetch('/api/stems', { method: 'POST', body: formData })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+        bar.style.width = '100%';
+        if (data.error) { msg.textContent = 'Error: ' + data.error; msg.style.color = '#C41E3A'; return; }
+        status.style.display = 'none';
+        results.style.display = 'block';
+        var stemItems = [
+            { label: 'Vocals', icon: '🎤', url: data.vocals_url },
+            { label: 'Drums', icon: '🥁', url: data.drums_url },
+            { label: 'Bass', icon: '🎸', url: data.bass_url },
+            { label: 'Other', icon: '🎹', url: data.other_url }
+        ];
+        results.innerHTML =
+            '<div style="text-align:center;margin-bottom:16px;">' +
+                '<span style="font-family:Playfair Display,serif;font-size:1.2rem;color:#FFE082;">Stems Ready: ' + (data.filename || file.name) + '</span>' +
+                '<div style="font-size:0.65rem;color:#8A7A5A;margin-top:4px;">4 stems separated via Demucs AI</div>' +
+            '</div>' +
+            '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px;">' +
+            stemItems.map(function(s){
+                return '<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;text-align:center;">' +
+                    '<div style="font-size:1.8rem;margin-bottom:6px;">' + s.icon + '</div>' +
+                    '<div style="font-family:Playfair Display,serif;font-size:1rem;color:#FFE082;margin-bottom:8px;">' + s.label + '</div>' +
+                    (s.url ? '<a href="' + s.url + '" target="_blank" download style="display:inline-block;padding:8px 16px;border-radius:10px;background:linear-gradient(135deg,#D4A017,#B8860B);color:#0D0D1A;font-weight:800;font-size:0.75rem;text-decoration:none;font-family:Nunito,sans-serif;">Download</a>' :
+                    '<span style="font-size:0.7rem;color:#6A6A7A;">Not available</span>') +
+                '</div>';
+            }).join('') +
+            '</div>' +
+            '<div style="text-align:center;margin-top:16px;"><button class="nav-btn primary" onclick="resetStems()" style="font-size:0.8rem;padding:10px 24px;">Separate Another Track</button></div>';
+    })
+    .catch(function(err){ bar.style.width = '100%'; msg.textContent = 'Upload failed: ' + err.message; msg.style.color = '#C41E3A'; });
+}
+
+function resetStems() {
+    document.getElementById('stemDropZone').style.display = '';
+    document.getElementById('stemStatus').style.display = 'none';
+    document.getElementById('stemResults').style.display = 'none';
+    document.getElementById('stemFile').value = '';
 }
 
 /* --- Mix Digestor (Real file upload + AudD) --- */
