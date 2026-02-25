@@ -115,17 +115,23 @@ def parse_enterprise_result(results):
                 "artist": artist,
                 "title": title,
                 "first_offset": offset,
+                "offsets": [offset],
                 "spotify_url": spotify_url,
                 "apple_music_url": apple_url,
                 "album_art": album_art,
                 "label": song.get("label", ""),
                 "album": song.get("album", ""),
             }
+        else:
+            seen_tracks[track_key]["offsets"].append(offset)
 
-    tracks = sorted(seen_tracks.values(), key=lambda t: t["first_offset"])
+    # Filter: track must appear in 3+ scan windows to be real (removes noise/fragments)
+    tracks = [t for t in seen_tracks.values() if len(t.get("offsets", [t["first_offset"]])) >= 3]
+    tracks = sorted(tracks, key=lambda t: t["first_offset"])
     for i, track in enumerate(tracks):
         track["position"] = i + 1
         track["timestamp"] = format_timestamp(track["first_offset"])
+        track.pop("offsets", None)
 
     return {"tracks": tracks, "raw_matches": raw_count, "unique_tracks": len(tracks)}
 
