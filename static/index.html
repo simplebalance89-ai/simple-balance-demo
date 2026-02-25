@@ -1,0 +1,1460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="version" content="1.0">
+<meta property="og:title" content="Simple Balance Music - AI Music Production Suite">
+<meta property="og:description" content="AI-powered music production suite. Create beats, master tracks, separate stems, and build DJ sets.">
+<meta property="og:type" content="website">
+<title>Simple Balance Music - AI Production Suite</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;900&family=Nunito:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+        font-family: 'Nunito', sans-serif;
+        background: #0D0D1A;
+        color: #FFFEF7;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        overflow-x: hidden;
+    }
+
+    /* ===== CONTEXT BANNER (persistent) ===== */
+    .context-banner {
+        width: 100%;
+        background: rgba(196, 30, 58, 0.15);
+        border-bottom: 1px solid rgba(196, 30, 58, 0.3);
+        padding: 8px 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-size: 0.72rem;
+        color: #E0C8A0;
+        letter-spacing: 0.5px;
+        z-index: 100;
+        flex-shrink: 0;
+    }
+    .context-banner .banner-sep {
+        color: rgba(255,255,255,0.15);
+        margin: 0 2px;
+    }
+
+    /* ===== PROGRESS INDICATOR ===== */
+    .progress-bar {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 10px 16px 6px;
+        flex-shrink: 0;
+    }
+    .progress-bar.hidden { display: none; }
+    .progress-step {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .progress-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.1);
+        border: 1.5px solid rgba(255,255,255,0.15);
+        transition: all 0.4s ease;
+    }
+    .progress-dot.active {
+        background: #D4A017;
+        border-color: #D4A017;
+        box-shadow: 0 0 8px rgba(212,160,23,0.4);
+    }
+    .progress-dot.done {
+        background: #4CAF50;
+        border-color: #4CAF50;
+    }
+    .progress-line {
+        width: 24px;
+        height: 2px;
+        background: rgba(255,255,255,0.08);
+        transition: background 0.4s ease;
+    }
+    .progress-line.done { background: #4CAF50; }
+    .progress-label {
+        font-size: 0.6rem;
+        color: #666;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        margin-left: 8px;
+    }
+
+    /* ===== STEPS CONTAINER ===== */
+    .steps-container {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 100%;
+        overflow-y: auto;
+    }
+
+    .step {
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        width: 100%;
+        max-width: 900px;
+        padding: 0 20px;
+        animation: fadeIn 0.5s ease;
+    }
+    .step.active { display: flex; }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(12px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ===== STEP 0: WELCOME ===== */
+    .welcome-screen {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 40px 20px;
+        min-height: 70vh;
+    }
+    .welcome-eyebrow {
+        font-size: 0.65rem;
+        letter-spacing: 4px;
+        text-transform: uppercase;
+        color: #C41E3A;
+        font-weight: 700;
+        margin-bottom: 16px;
+    }
+    .welcome-title {
+        font-family: 'Playfair Display', serif;
+        font-size: clamp(1.8rem, 5vw, 3rem);
+        font-weight: 900;
+        background: linear-gradient(135deg, #D4A017, #FFE082, #D4A017);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin-bottom: 16px;
+        line-height: 1.2;
+    }
+    .welcome-desc {
+        font-size: clamp(0.9rem, 2.2vw, 1.1rem);
+        color: #8A7A5A;
+        max-width: 480px;
+        line-height: 1.6;
+        margin-bottom: 8px;
+    }
+    .welcome-sub {
+        font-size: 0.8rem;
+        color: #C41E3A;
+        font-weight: 700;
+        letter-spacing: 1px;
+        margin-bottom: 32px;
+    }
+    .welcome-cta {
+        padding: 16px 48px;
+        border-radius: 32px;
+        border: none;
+        background: linear-gradient(135deg, #D4A017, #B8860B);
+        color: #0D0D1A;
+        font-family: 'Nunito', sans-serif;
+        font-size: 1.1rem;
+        font-weight: 800;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 6px 24px rgba(212,160,23,0.3);
+        letter-spacing: 1px;
+    }
+    .welcome-cta:hover {
+        transform: scale(1.05);
+        box-shadow: 0 10px 40px rgba(212,160,23,0.5);
+    }
+    .welcome-powered {
+        margin-top: 32px;
+        font-size: 0.65rem;
+        color: #444;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+    }
+
+    /* ===== STEP 1: WHO ARE YOU ===== */
+    .pick-header {
+        text-align: center;
+        margin: 20px 0 8px;
+    }
+    .pick-header h2 {
+        font-family: 'Playfair Display', serif;
+        font-size: 1.5rem;
+        color: #FFE082;
+        margin-bottom: 4px;
+    }
+    .pick-header p {
+        font-size: 0.85rem;
+        color: #8A7A5A;
+    }
+
+    .name-input-wrap {
+        width: 100%;
+        max-width: 400px;
+        margin: 12px 0 20px;
+    }
+    .name-input {
+        width: 100%;
+        padding: 12px 20px;
+        border-radius: 16px;
+        border: 2px solid rgba(255,255,255,0.08);
+        background: rgba(255,255,255,0.04);
+        color: #FFFEF7;
+        font-family: 'Nunito', sans-serif;
+        font-size: 1rem;
+        outline: none;
+        transition: border-color 0.3s ease;
+    }
+    .name-input::placeholder { color: #555; }
+    .name-input:focus { border-color: rgba(212,160,23,0.5); }
+
+    .role-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        width: 100%;
+        max-width: 700px;
+        padding: 0 0 20px;
+    }
+    .role-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 20px 12px 16px;
+        border-radius: 16px;
+        background: rgba(255,255,255,0.03);
+        border: 2px solid rgba(255,255,255,0.06);
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-align: center;
+    }
+    .role-card:hover {
+        border-color: rgba(212,160,23,0.4);
+        background: rgba(212,160,23,0.06);
+        transform: translateY(-2px);
+    }
+    .role-card.selected {
+        border-color: #D4A017;
+        background: rgba(212,160,23,0.12);
+        box-shadow: 0 4px 20px rgba(212,160,23,0.2);
+    }
+    .role-icon {
+        font-size: 2rem;
+        margin-bottom: 8px;
+    }
+    .role-card .rc-name {
+        font-family: 'Playfair Display', serif;
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: #FFE082;
+        margin-bottom: 4px;
+    }
+    .role-card .rc-desc {
+        font-size: 0.65rem;
+        color: #8A7A5A;
+        line-height: 1.3;
+    }
+
+    /* ===== STEP 2: PICK YOUR MODE ===== */
+    .mode-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 12px;
+        width: 100%;
+        max-width: 700px;
+        padding: 12px 0 20px;
+    }
+    .mode-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 14px 8px 10px;
+        border-radius: 16px;
+        background: rgba(255,255,255,0.03);
+        border: 2px solid rgba(255,255,255,0.06);
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-align: center;
+    }
+    .mode-card:hover {
+        border-color: rgba(212,160,23,0.4);
+        background: rgba(212,160,23,0.06);
+        transform: translateY(-2px);
+    }
+    .mode-card.selected {
+        border-color: #D4A017;
+        background: rgba(212,160,23,0.12);
+        box-shadow: 0 4px 20px rgba(212,160,23,0.2);
+    }
+    .mode-icon {
+        font-size: 1.6rem;
+        margin-bottom: 6px;
+    }
+    .mode-card .mc-name {
+        font-family: 'Playfair Display', serif;
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #FFE082;
+        margin-bottom: 2px;
+        line-height: 1.2;
+    }
+    .mode-card .mc-desc {
+        font-size: 0.55rem;
+        color: #8A7A5A;
+        line-height: 1.2;
+    }
+
+    /* ===== NAV BUTTONS ===== */
+    .step-nav {
+        display: flex;
+        gap: 12px;
+        margin: 8px 0 20px;
+    }
+    .nav-btn {
+        padding: 10px 28px;
+        border-radius: 24px;
+        border: none;
+        font-family: 'Nunito', sans-serif;
+        font-size: 0.85rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        letter-spacing: 0.5px;
+    }
+    .nav-btn.primary {
+        background: linear-gradient(135deg, #D4A017, #B8860B);
+        color: #0D0D1A;
+        box-shadow: 0 4px 16px rgba(212,160,23,0.3);
+    }
+    .nav-btn.primary:hover {
+        transform: scale(1.03);
+        box-shadow: 0 6px 24px rgba(212,160,23,0.5);
+    }
+    .nav-btn.primary:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+        transform: none;
+    }
+    .nav-btn.secondary {
+        background: rgba(255,255,255,0.06);
+        color: #999;
+        border: 1px solid rgba(255,255,255,0.1);
+    }
+    .nav-btn.secondary:hover {
+        background: rgba(255,255,255,0.1);
+        color: #CCC;
+    }
+
+    /* ===== STEP 3: EXPERIENCE IT ===== */
+    .experience-area {
+        width: 100%;
+        max-width: 700px;
+        min-height: 300px;
+    }
+    .experience-title {
+        text-align: center;
+        margin-bottom: 16px;
+    }
+    .experience-title h2 {
+        font-family: 'Playfair Display', serif;
+        font-size: 1.4rem;
+        color: #FFE082;
+        margin-bottom: 4px;
+    }
+    .experience-title p {
+        font-size: 0.8rem;
+        color: #8A7A5A;
+    }
+
+    /* Chat interface for DJ Command */
+    .chat-interface {
+        width: 100%;
+        background: rgba(255,255,255,0.02);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 16px;
+        padding: 16px;
+        margin-bottom: 16px;
+    }
+    .chat-messages {
+        min-height: 120px;
+        max-height: 300px;
+        overflow-y: auto;
+        margin-bottom: 12px;
+    }
+    .chat-msg {
+        padding: 10px 14px;
+        border-radius: 12px;
+        margin-bottom: 8px;
+        font-size: 0.85rem;
+        line-height: 1.5;
+        animation: fadeIn 0.3s ease;
+    }
+    .chat-msg.system {
+        background: rgba(212,160,23,0.1);
+        border: 1px solid rgba(212,160,23,0.2);
+        color: #E0C8A0;
+    }
+    .chat-msg.user {
+        background: rgba(255,255,255,0.06);
+        color: #FFFEF7;
+        margin-left: 40px;
+        text-align: right;
+    }
+    .chat-msg.assistant {
+        background: rgba(212,160,23,0.08);
+        color: #E0C8A0;
+        margin-right: 40px;
+    }
+    .chat-msg .msg-label {
+        font-size: 0.6rem;
+        font-weight: 700;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: #D4A017;
+        margin-bottom: 4px;
+    }
+    .prompt-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .prompt-chip {
+        padding: 8px 16px;
+        border-radius: 20px;
+        border: 1px solid rgba(212,160,23,0.3);
+        background: rgba(212,160,23,0.06);
+        color: #D4A017;
+        font-size: 0.75rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    .prompt-chip:hover {
+        background: rgba(212,160,23,0.15);
+        border-color: #D4A017;
+        transform: translateY(-1px);
+    }
+    .prompt-chip.used {
+        opacity: 0.4;
+        cursor: default;
+        transform: none;
+    }
+
+    /* Mastering demo */
+    .mastering-demo {
+        width: 100%;
+    }
+    .mastering-result {
+        display: none;
+        animation: fadeIn 0.5s ease;
+    }
+    .mastering-result.visible { display: block; }
+    .analysis-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        margin-top: 12px;
+    }
+    .analysis-card {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 12px;
+        padding: 14px;
+        text-align: center;
+    }
+    .analysis-card .ac-label {
+        font-size: 0.65rem;
+        color: #8A7A5A;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 6px;
+    }
+    .analysis-card .ac-value {
+        font-family: 'Playfair Display', serif;
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: #FFE082;
+    }
+    .analysis-card .ac-detail {
+        font-size: 0.7rem;
+        color: #666;
+        margin-top: 4px;
+    }
+    .before-after {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 16px;
+    }
+    .ba-card {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 12px;
+        padding: 14px;
+    }
+    .ba-card h4 {
+        font-family: 'Playfair Display', serif;
+        font-size: 0.85rem;
+        color: #FFE082;
+        margin-bottom: 8px;
+        text-align: center;
+    }
+    .ba-meter {
+        height: 6px;
+        background: rgba(255,255,255,0.06);
+        border-radius: 3px;
+        margin: 6px 0;
+        overflow: hidden;
+    }
+    .ba-meter-fill {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 1s ease;
+    }
+    .ba-meter-fill.gold { background: linear-gradient(90deg, #D4A017, #FFE082); }
+    .ba-meter-fill.green { background: linear-gradient(90deg, #4CAF50, #81C784); }
+    .ba-label {
+        font-size: 0.65rem;
+        color: #8A7A5A;
+        display: flex;
+        justify-content: space-between;
+    }
+
+    /* Discovery mood buttons */
+    .mood-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+    .mood-btn {
+        padding: 14px;
+        border-radius: 14px;
+        border: 2px solid rgba(255,255,255,0.06);
+        background: rgba(255,255,255,0.03);
+        color: #FFE082;
+        font-family: 'Nunito', sans-serif;
+        font-size: 0.9rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-align: center;
+    }
+    .mood-btn:hover {
+        border-color: rgba(212,160,23,0.4);
+        background: rgba(212,160,23,0.06);
+        transform: translateY(-2px);
+    }
+    .mood-btn.active {
+        border-color: #D4A017;
+        background: rgba(212,160,23,0.12);
+    }
+    .mood-emoji { font-size: 1.3rem; display: block; margin-bottom: 4px; }
+    .track-results {
+        display: none;
+        animation: fadeIn 0.5s ease;
+    }
+    .track-results.visible { display: block; }
+    .track-card {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 12px;
+        padding: 12px 16px;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .track-art {
+        width: 44px;
+        height: 44px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, rgba(212,160,23,0.2), rgba(212,160,23,0.05));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        flex-shrink: 0;
+    }
+    .track-info { flex: 1; }
+    .track-info .ti-name {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #FFFEF7;
+    }
+    .track-info .ti-artist {
+        font-size: 0.7rem;
+        color: #8A7A5A;
+    }
+    .track-meta {
+        text-align: right;
+        font-size: 0.65rem;
+        color: #666;
+    }
+    .track-meta .tm-bpm { color: #D4A017; font-weight: 700; }
+
+    /* Generation demo */
+    .genre-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+    .genre-btn {
+        padding: 14px;
+        border-radius: 14px;
+        border: 2px solid rgba(255,255,255,0.06);
+        background: rgba(255,255,255,0.03);
+        color: #FFE082;
+        font-family: 'Nunito', sans-serif;
+        font-size: 0.85rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-align: center;
+    }
+    .genre-btn:hover {
+        border-color: rgba(212,160,23,0.4);
+        background: rgba(212,160,23,0.06);
+        transform: translateY(-2px);
+    }
+    .genre-btn.active {
+        border-color: #D4A017;
+        background: rgba(212,160,23,0.12);
+    }
+    .gen-result {
+        display: none;
+        animation: fadeIn 0.5s ease;
+    }
+    .gen-result.visible { display: block; }
+    .waveform-placeholder {
+        width: 100%;
+        height: 60px;
+        background: linear-gradient(90deg,
+            rgba(212,160,23,0.05) 0%,
+            rgba(212,160,23,0.15) 25%,
+            rgba(212,160,23,0.08) 50%,
+            rgba(212,160,23,0.2) 75%,
+            rgba(212,160,23,0.05) 100%);
+        border-radius: 8px;
+        position: relative;
+        overflow: hidden;
+        margin: 12px 0;
+    }
+    .waveform-placeholder::after {
+        content: '';
+        position: absolute;
+        top: 0; left: -100%;
+        width: 100%; height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(212,160,23,0.1), transparent);
+        animation: waveShimmer 2s infinite;
+    }
+    @keyframes waveShimmer {
+        to { left: 100%; }
+    }
+    .gen-details {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+    }
+    .gen-detail-item {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 10px;
+        padding: 10px;
+        text-align: center;
+    }
+    .gen-detail-item .gd-label {
+        font-size: 0.6rem;
+        color: #8A7A5A;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .gen-detail-item .gd-value {
+        font-family: 'Playfair Display', serif;
+        font-size: 1rem;
+        font-weight: 700;
+        color: #FFE082;
+        margin-top: 2px;
+    }
+
+    /* Default mode sample cards */
+    .sample-cards {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        width: 100%;
+    }
+    .sample-card {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 14px;
+        padding: 16px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    .sample-card:hover {
+        border-color: rgba(212,160,23,0.3);
+        background: rgba(212,160,23,0.04);
+        transform: translateY(-1px);
+    }
+    .sample-card .sc-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 6px;
+    }
+    .sample-card .sc-icon { font-size: 1.2rem; }
+    .sample-card .sc-title {
+        font-size: 0.9rem;
+        font-weight: 700;
+        color: #FFE082;
+    }
+    .sample-card .sc-body {
+        font-size: 0.78rem;
+        color: #8A7A5A;
+        line-height: 1.5;
+    }
+    .sample-card .sc-response {
+        display: none;
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(255,255,255,0.06);
+        font-size: 0.8rem;
+        color: #E0C8A0;
+        line-height: 1.5;
+        animation: fadeIn 0.3s ease;
+    }
+    .sample-card.expanded .sc-response { display: block; }
+
+    /* ===== STEP 4: WHAT CAN IT DO ===== */
+    .capabilities-section {
+        width: 100%;
+        max-width: 700px;
+        text-align: center;
+    }
+    .capabilities-section h2 {
+        font-family: 'Playfair Display', serif;
+        font-size: 1.5rem;
+        color: #FFE082;
+        margin: 20px 0 4px;
+    }
+    .capabilities-section .cap-sub {
+        font-size: 0.8rem;
+        color: #8A7A5A;
+        margin-bottom: 24px;
+    }
+    .cap-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+    .cap-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+    }
+    .cap-icon-circle {
+        width: 52px;
+        height: 52px;
+        border-radius: 50%;
+        background: rgba(212,160,23,0.08);
+        border: 1.5px solid rgba(212,160,23,0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.3rem;
+        transition: all 0.3s ease;
+    }
+    .cap-item:hover .cap-icon-circle {
+        background: rgba(212,160,23,0.15);
+        border-color: rgba(212,160,23,0.5);
+        transform: scale(1.08);
+    }
+    .cap-label {
+        font-size: 0.6rem;
+        color: #8A7A5A;
+        text-align: center;
+        line-height: 1.2;
+    }
+
+    /* ===== FOOTER ===== */
+    .app-footer {
+        width: 100%;
+        text-align: center;
+        padding: 16px;
+        font-size: 0.6rem;
+        color: #333;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        flex-shrink: 0;
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 600px) {
+        .role-grid { grid-template-columns: repeat(2, 1fr); }
+        .mode-grid { grid-template-columns: repeat(2, 1fr); }
+        .cap-grid { grid-template-columns: repeat(3, 1fr); gap: 12px; }
+        .analysis-grid { grid-template-columns: 1fr; }
+        .before-after { grid-template-columns: 1fr; }
+        .gen-details { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 400px) {
+        .cap-grid { grid-template-columns: repeat(2, 1fr); }
+        .genre-grid { grid-template-columns: 1fr; }
+        .mood-grid { grid-template-columns: 1fr; }
+    }
+</style>
+</head>
+<body>
+
+<!-- CONTEXT BANNER -->
+<div class="context-banner">
+    <span>SIMPLE BALANCE MUSIC</span>
+    <span class="banner-sep">|</span>
+    <span>AI Production Suite Demo</span>
+    <span class="banner-sep">|</span>
+    <span>Click-through Experience</span>
+</div>
+
+<!-- PROGRESS BAR -->
+<div class="progress-bar hidden" id="progressBar">
+    <div class="progress-step">
+        <div class="progress-dot" data-step="0"></div>
+        <div class="progress-line" data-line="0"></div>
+    </div>
+    <div class="progress-step">
+        <div class="progress-dot" data-step="1"></div>
+        <div class="progress-line" data-line="1"></div>
+    </div>
+    <div class="progress-step">
+        <div class="progress-dot" data-step="2"></div>
+        <div class="progress-line" data-line="2"></div>
+    </div>
+    <div class="progress-step">
+        <div class="progress-dot" data-step="3"></div>
+        <div class="progress-line" data-line="3"></div>
+    </div>
+    <div class="progress-step">
+        <div class="progress-dot" data-step="4"></div>
+    </div>
+    <span class="progress-label" id="progressLabel"></span>
+</div>
+
+<!-- STEPS -->
+<div class="steps-container">
+
+    <!-- STEP 0: WELCOME -->
+    <div class="step active" id="step0">
+        <div class="welcome-screen">
+            <div class="welcome-eyebrow">LIVE AI DEMO</div>
+            <h1 class="welcome-title">Welcome to Simple Balance Music</h1>
+            <p class="welcome-desc">AI-powered music production suite. Create beats, master tracks, separate stems, and build DJ sets.</p>
+            <p class="welcome-sub">The future of music production</p>
+            <button class="welcome-cta" onclick="goToStep(1)">Start Experience</button>
+            <div class="welcome-powered">POWERED BY CAPO AI</div>
+        </div>
+    </div>
+
+    <!-- STEP 1: WHO ARE YOU -->
+    <div class="step" id="step1">
+        <div class="pick-header">
+            <h2>What's your name?</h2>
+            <p>Optional. Just lets us personalize things.</p>
+        </div>
+        <div class="name-input-wrap">
+            <input type="text" class="name-input" id="userName" placeholder="Enter your name (optional)" maxlength="30">
+        </div>
+        <div class="pick-header">
+            <h2>Pick your role</h2>
+            <p>Tap the one that fits</p>
+        </div>
+        <div class="role-grid" id="roleGrid">
+            <div class="role-card" data-role="dj" onclick="selectRole(this)">
+                <div class="role-icon">🎧</div>
+                <div class="rc-name">DJ</div>
+                <div class="rc-desc">Build sets, mix tracks, find events</div>
+            </div>
+            <div class="role-card" data-role="producer" onclick="selectRole(this)">
+                <div class="role-icon">🎛️</div>
+                <div class="rc-name">Producer</div>
+                <div class="rc-desc">Create beats, master audio, separate stems</div>
+            </div>
+            <div class="role-card" data-role="artist" onclick="selectRole(this)">
+                <div class="role-icon">🎤</div>
+                <div class="rc-name">Artist</div>
+                <div class="rc-desc">Generate lyrics, find your sound</div>
+            </div>
+            <div class="role-card" data-role="listener" onclick="selectRole(this)">
+                <div class="role-icon">🎵</div>
+                <div class="rc-name">Listener</div>
+                <div class="rc-desc">Discover new music, explore moods</div>
+            </div>
+        </div>
+        <div class="step-nav">
+            <button class="nav-btn secondary" onclick="goToStep(0)">Back</button>
+            <button class="nav-btn primary" id="step1Next" onclick="goToStep(2)" disabled>Continue</button>
+        </div>
+    </div>
+
+    <!-- STEP 2: PICK YOUR MODE -->
+    <div class="step" id="step2">
+        <div class="pick-header">
+            <h2>Pick Your Mode</h2>
+            <p>Tap to explore</p>
+        </div>
+        <div class="mode-grid" id="modeGrid">
+            <div class="mode-card" data-mode="jaw" onclick="selectMode(this)">
+                <div class="mode-icon">🧠</div>
+                <div class="mc-name">J.A.W. DJ Command</div>
+                <div class="mc-desc">Your DJ advisor and energy flow guardian</div>
+            </div>
+            <div class="mode-card" data-mode="discovery" onclick="selectMode(this)">
+                <div class="mode-icon">🔍</div>
+                <div class="mc-name">Music Discovery</div>
+                <div class="mc-desc">Find music by mood, genre, or vibe</div>
+            </div>
+            <div class="mode-card" data-mode="mastering" onclick="selectMode(this)">
+                <div class="mode-icon">🎚️</div>
+                <div class="mc-name">AI Mastering</div>
+                <div class="mc-desc">Master your tracks with AI precision</div>
+            </div>
+            <div class="mode-card" data-mode="stems" onclick="selectMode(this)">
+                <div class="mode-icon">🔀</div>
+                <div class="mc-name">Stem Separation</div>
+                <div class="mc-desc">Split any track into vocals, drums, bass</div>
+            </div>
+            <div class="mode-card" data-mode="generation" onclick="selectMode(this)">
+                <div class="mode-icon">✨</div>
+                <div class="mc-name">AI Generation</div>
+                <div class="mc-desc">Generate beats, MIDI, and full tracks</div>
+            </div>
+            <div class="mode-card" data-mode="events" onclick="selectMode(this)">
+                <div class="mode-icon">📍</div>
+                <div class="mc-name">Events Radar</div>
+                <div class="mc-desc">Find festivals, shows, and events near you</div>
+            </div>
+            <div class="mode-card" data-mode="setbuilder" onclick="selectMode(this)">
+                <div class="mode-icon">📋</div>
+                <div class="mc-name">Set Builder</div>
+                <div class="mc-desc">Build DJ sets with harmonic matching</div>
+            </div>
+            <div class="mode-card" data-mode="archive" onclick="selectMode(this)">
+                <div class="mode-icon">💾</div>
+                <div class="mc-name">Mix Archive</div>
+                <div class="mc-desc">Store and analyze your recorded mixes</div>
+            </div>
+            <div class="mode-card" data-mode="tools" onclick="selectMode(this)">
+                <div class="mode-icon">🛠️</div>
+                <div class="mc-name">Producer Tools</div>
+                <div class="mc-desc">Reference analysis, scales, drum grids</div>
+            </div>
+            <div class="mode-card" data-mode="dashboard" onclick="selectMode(this)">
+                <div class="mode-icon">📊</div>
+                <div class="mc-name">Dashboard</div>
+                <div class="mc-desc">Track your stats and workflow</div>
+            </div>
+        </div>
+        <div class="step-nav">
+            <button class="nav-btn secondary" onclick="goToStep(1)">Back</button>
+            <button class="nav-btn primary" id="step2Next" onclick="goToStep(3)" disabled>Continue</button>
+        </div>
+    </div>
+
+    <!-- STEP 3: EXPERIENCE IT -->
+    <div class="step" id="step3">
+        <div class="experience-area" id="experienceArea">
+            <!-- Populated dynamically by JS -->
+        </div>
+        <div class="step-nav">
+            <button class="nav-btn secondary" onclick="goToStep(2)">Back</button>
+            <button class="nav-btn primary" onclick="goToStep(4)">Continue</button>
+        </div>
+    </div>
+
+    <!-- STEP 4: WHAT CAN IT DO -->
+    <div class="step" id="step4">
+        <div class="capabilities-section">
+            <h2>What Can It Do?</h2>
+            <p class="cap-sub">Simple Balance Music has 10 production modes built in</p>
+            <div class="cap-grid">
+                <div class="cap-item">
+                    <div class="cap-icon-circle">🧠</div>
+                    <div class="cap-label">J.A.W. DJ<br>Command</div>
+                </div>
+                <div class="cap-item">
+                    <div class="cap-icon-circle">🔍</div>
+                    <div class="cap-label">Music<br>Discovery</div>
+                </div>
+                <div class="cap-item">
+                    <div class="cap-icon-circle">🎚️</div>
+                    <div class="cap-label">AI<br>Mastering</div>
+                </div>
+                <div class="cap-item">
+                    <div class="cap-icon-circle">🔀</div>
+                    <div class="cap-label">Stem<br>Separation</div>
+                </div>
+                <div class="cap-item">
+                    <div class="cap-icon-circle">✨</div>
+                    <div class="cap-label">AI<br>Generation</div>
+                </div>
+                <div class="cap-item">
+                    <div class="cap-icon-circle">📍</div>
+                    <div class="cap-label">Events<br>Radar</div>
+                </div>
+                <div class="cap-item">
+                    <div class="cap-icon-circle">📋</div>
+                    <div class="cap-label">Set<br>Builder</div>
+                </div>
+                <div class="cap-item">
+                    <div class="cap-icon-circle">💾</div>
+                    <div class="cap-label">Mix<br>Archive</div>
+                </div>
+                <div class="cap-item">
+                    <div class="cap-icon-circle">🛠️</div>
+                    <div class="cap-label">Producer<br>Tools</div>
+                </div>
+                <div class="cap-item">
+                    <div class="cap-icon-circle">📊</div>
+                    <div class="cap-label">Dashboard</div>
+                </div>
+            </div>
+        </div>
+        <div class="step-nav">
+            <button class="nav-btn secondary" onclick="goToStep(2)">Back</button>
+            <button class="nav-btn primary" onclick="goToStep(0)">Start Over</button>
+        </div>
+    </div>
+
+</div>
+
+<!-- FOOTER -->
+<div class="app-footer">POWERED BY CAPO AI</div>
+
+<script>
+/* ===== STATE ===== */
+let currentStep = 0;
+let selectedRole = null;
+let selectedMode = null;
+const userName = () => document.getElementById('userName').value.trim();
+
+const STEP_LABELS = ['Welcome', 'Profile', 'Mode', 'Experience', 'Overview'];
+
+/* ===== NAVIGATION ===== */
+function goToStep(n) {
+    // Hide current
+    document.getElementById('step' + currentStep).classList.remove('active');
+    currentStep = n;
+    // Show new
+    const newStep = document.getElementById('step' + n);
+    newStep.classList.remove('active');
+    void newStep.offsetWidth; // force reflow for animation
+    newStep.classList.add('active');
+
+    // Progress bar
+    const bar = document.getElementById('progressBar');
+    if (n === 0) {
+        bar.classList.add('hidden');
+    } else {
+        bar.classList.remove('hidden');
+        updateProgress(n);
+    }
+
+    // Build experience area if step 3
+    if (n === 3) buildExperience();
+
+    // Scroll to top
+    window.scrollTo(0, 0);
+}
+
+function updateProgress(active) {
+    document.querySelectorAll('.progress-dot').forEach(dot => {
+        const s = parseInt(dot.dataset.step);
+        dot.classList.remove('active', 'done');
+        if (s === active) dot.classList.add('active');
+        else if (s < active) dot.classList.add('done');
+    });
+    document.querySelectorAll('.progress-line').forEach(line => {
+        const s = parseInt(line.dataset.line);
+        line.classList.toggle('done', s < active);
+    });
+    document.getElementById('progressLabel').textContent = STEP_LABELS[active] || '';
+}
+
+/* ===== ROLE SELECTION ===== */
+function selectRole(el) {
+    document.querySelectorAll('.role-card').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+    selectedRole = el.dataset.role;
+    document.getElementById('step1Next').disabled = false;
+}
+
+/* ===== MODE SELECTION ===== */
+function selectMode(el) {
+    document.querySelectorAll('.mode-card').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+    selectedMode = el.dataset.mode;
+    document.getElementById('step2Next').disabled = false;
+}
+
+/* ===== EXPERIENCE BUILDERS ===== */
+const MODE_NAMES = {
+    jaw: 'J.A.W. DJ Command',
+    discovery: 'Music Discovery',
+    mastering: 'AI Mastering',
+    stems: 'Stem Separation',
+    generation: 'AI Generation',
+    events: 'Events Radar',
+    setbuilder: 'Set Builder',
+    archive: 'Mix Archive',
+    tools: 'Producer Tools',
+    dashboard: 'Dashboard'
+};
+
+function buildExperience() {
+    const area = document.getElementById('experienceArea');
+    const name = userName() || 'Producer';
+    const modeName = MODE_NAMES[selectedMode] || 'Mode';
+
+    if (selectedMode === 'jaw') {
+        area.innerHTML = buildJAWExperience(name, modeName);
+    } else if (selectedMode === 'mastering') {
+        area.innerHTML = buildMasteringExperience(name, modeName);
+    } else if (selectedMode === 'discovery') {
+        area.innerHTML = buildDiscoveryExperience(name, modeName);
+    } else if (selectedMode === 'generation') {
+        area.innerHTML = buildGenerationExperience(name, modeName);
+    } else {
+        area.innerHTML = buildDefaultExperience(name, modeName);
+    }
+}
+
+/* --- JAW DJ Command (Chat) --- */
+function buildJAWExperience(name, modeName) {
+    return `
+        <div class="experience-title">
+            <h2>${modeName}</h2>
+            <p>Your AI DJ advisor. Tap a prompt to try it.</p>
+        </div>
+        <div class="chat-interface">
+            <div class="chat-messages" id="chatMessages">
+                <div class="chat-msg system">
+                    <div class="msg-label">J.A.W.</div>
+                    Hey ${name}. I'm your DJ command center. Ask me anything about mixing, sets, keys, or energy flow.
+                </div>
+            </div>
+            <div class="prompt-chips" id="promptChips">
+                <div class="prompt-chip" onclick="sendJAWPrompt(this, 0)">Build me a 2-hour deep house set</div>
+                <div class="prompt-chip" onclick="sendJAWPrompt(this, 1)">What key goes with Bb minor?</div>
+                <div class="prompt-chip" onclick="sendJAWPrompt(this, 2)">Energy check on my tracklist</div>
+            </div>
+        </div>`;
+}
+
+const JAW_RESPONSES = [
+    `Here's your 2-hour deep house set structure:<br><br>
+    <strong>Hour 1 (Warm-Up):</strong> 118-120 BPM<br>
+    &bull; Open with atmospheric pads, minimal percussion<br>
+    &bull; Build layered grooves over first 20 min<br>
+    &bull; Key path: Am &rarr; Dm &rarr; Gm &rarr; Cm<br><br>
+    <strong>Hour 2 (Peak):</strong> 122-124 BPM<br>
+    &bull; Driving basslines, vocal chops<br>
+    &bull; Peak energy at 1:30 mark<br>
+    &bull; Wind down last 15 min<br>
+    &bull; Key path: Fm &rarr; Bbm &rarr; Ebm &rarr; Ab<br><br>
+    <em>Want me to suggest specific tracks for each slot?</em>`,
+
+    `Bb minor (Bbm) works harmonically with:<br><br>
+    &bull; <strong>Relative Major:</strong> Db Major (perfect match)<br>
+    &bull; <strong>4th:</strong> Eb minor (smooth transition)<br>
+    &bull; <strong>5th:</strong> F minor (energy lift)<br>
+    &bull; <strong>Parallel:</strong> Bb Major (mood shift)<br><br>
+    <strong>Pro tip:</strong> For deep house, Bbm &rarr; Ebm is your money transition. Keeps the vibe locked while subtly shifting the energy up. Use a 16-bar blend.`,
+
+    `Energy analysis coming in:<br><br>
+    To check your tracklist energy I'd scan each track for:<br>
+    &bull; <strong>BPM curve</strong> - should flow naturally, no sudden jumps over 4 BPM<br>
+    &bull; <strong>Key compatibility</strong> - Camelot wheel adjacent keys only<br>
+    &bull; <strong>Energy rating</strong> (1-10) - build gradually, peak at 2/3 mark<br>
+    &bull; <strong>Vocal density</strong> - avoid stacking two heavy vocal tracks<br><br>
+    <em>Paste your tracklist and I'll rate the flow.</em>`
+];
+
+function sendJAWPrompt(el, idx) {
+    if (el.classList.contains('used')) return;
+    el.classList.add('used');
+    const msgs = document.getElementById('chatMessages');
+    msgs.innerHTML += `<div class="chat-msg user">${el.textContent}</div>`;
+    setTimeout(() => {
+        msgs.innerHTML += `<div class="chat-msg assistant"><div class="msg-label">J.A.W.</div>${JAW_RESPONSES[idx]}</div>`;
+        msgs.scrollTop = msgs.scrollHeight;
+    }, 600);
+}
+
+/* --- AI Mastering --- */
+function buildMasteringExperience(name, modeName) {
+    return `
+        <div class="experience-title">
+            <h2>${modeName}</h2>
+            <p>Upload a track or try the demo analysis</p>
+        </div>
+        <div class="mastering-demo">
+            <div style="text-align:center; margin-bottom:16px;">
+                <button class="nav-btn primary" onclick="showMasteringResult()">Try Demo Analysis</button>
+            </div>
+            <div class="mastering-result" id="masteringResult">
+                <div class="analysis-grid">
+                    <div class="analysis-card">
+                        <div class="ac-label">BPM</div>
+                        <div class="ac-value">122</div>
+                        <div class="ac-detail">Steady tempo detected</div>
+                    </div>
+                    <div class="analysis-card">
+                        <div class="ac-label">Key</div>
+                        <div class="ac-value">F minor</div>
+                        <div class="ac-detail">Camelot: 4A</div>
+                    </div>
+                    <div class="analysis-card">
+                        <div class="ac-label">LUFS</div>
+                        <div class="ac-value">-8.2</div>
+                        <div class="ac-detail">Integrated loudness</div>
+                    </div>
+                    <div class="analysis-card">
+                        <div class="ac-label">True Peak</div>
+                        <div class="ac-value">-0.3 dB</div>
+                        <div class="ac-detail">Within streaming limits</div>
+                    </div>
+                </div>
+                <div class="before-after">
+                    <div class="ba-card">
+                        <h4>Before</h4>
+                        <div class="ba-label"><span>Low End</span><span>Muddy</span></div>
+                        <div class="ba-meter"><div class="ba-meter-fill gold" style="width:85%"></div></div>
+                        <div class="ba-label"><span>Stereo Width</span><span>Narrow</span></div>
+                        <div class="ba-meter"><div class="ba-meter-fill gold" style="width:35%"></div></div>
+                        <div class="ba-label"><span>Dynamics</span><span>Compressed</span></div>
+                        <div class="ba-meter"><div class="ba-meter-fill gold" style="width:25%"></div></div>
+                    </div>
+                    <div class="ba-card">
+                        <h4>After (AI Master)</h4>
+                        <div class="ba-label"><span>Low End</span><span>Tight</span></div>
+                        <div class="ba-meter"><div class="ba-meter-fill green" style="width:60%"></div></div>
+                        <div class="ba-label"><span>Stereo Width</span><span>Wide</span></div>
+                        <div class="ba-meter"><div class="ba-meter-fill green" style="width:78%"></div></div>
+                        <div class="ba-label"><span>Dynamics</span><span>Balanced</span></div>
+                        <div class="ba-meter"><div class="ba-meter-fill green" style="width:70%"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+}
+
+function showMasteringResult() {
+    document.getElementById('masteringResult').classList.add('visible');
+}
+
+/* --- Music Discovery --- */
+function buildDiscoveryExperience(name, modeName) {
+    return `
+        <div class="experience-title">
+            <h2>${modeName}</h2>
+            <p>Pick a mood. Get curated recommendations.</p>
+        </div>
+        <div class="mood-grid">
+            <div class="mood-btn" onclick="showMoodTracks(this, 'release')">
+                <span class="mood-emoji">🌊</span>Release
+            </div>
+            <div class="mood-btn" onclick="showMoodTracks(this, 'focus')">
+                <span class="mood-emoji">🎯</span>Focus
+            </div>
+            <div class="mood-btn" onclick="showMoodTracks(this, 'decompress')">
+                <span class="mood-emoji">🌿</span>Decompress
+            </div>
+            <div class="mood-btn" onclick="showMoodTracks(this, 'brotherhood')">
+                <span class="mood-emoji">🤝</span>Brotherhood
+            </div>
+        </div>
+        <div class="track-results" id="trackResults"></div>`;
+}
+
+const MOOD_TRACKS = {
+    release: [
+        { name: 'Opus', artist: 'Eric Prydz', bpm: 126, key: 'Dm', emoji: '🎹' },
+        { name: 'Strobe', artist: 'deadmau5', bpm: 128, key: 'Fm', emoji: '💫' },
+        { name: 'Innerbloom', artist: 'RUFUS DU SOL', bpm: 120, key: 'Cm', emoji: '🌅' },
+        { name: 'Catching Flies', artist: 'Catching Flies', bpm: 116, key: 'Am', emoji: '🦋' }
+    ],
+    focus: [
+        { name: 'Testarossa', artist: 'Yotto', bpm: 122, key: 'Gm', emoji: '🏎️' },
+        { name: 'Northern Soul', artist: 'Above & Beyond', bpm: 132, key: 'Ebm', emoji: '⭐' },
+        { name: 'Cola', artist: 'CamelPhat & Elderbrook', bpm: 124, key: 'Am', emoji: '🥤' },
+        { name: 'All Night', artist: 'Parov Stelar', bpm: 126, key: 'Bbm', emoji: '🌙' }
+    ],
+    decompress: [
+        { name: 'Sais', artist: 'Solomun', bpm: 118, key: 'Cm', emoji: '🎧' },
+        { name: 'Time', artist: 'Ben Bohmer', bpm: 120, key: 'Abm', emoji: '⏳' },
+        { name: 'Cherry Blossom', artist: 'Lane 8', bpm: 119, key: 'Em', emoji: '🌸' },
+        { name: 'Sirens', artist: 'Kidnap', bpm: 122, key: 'Fm', emoji: '🔔' }
+    ],
+    brotherhood: [
+        { name: 'The Nights', artist: 'Avicii', bpm: 126, key: 'Dm', emoji: '🔥' },
+        { name: "Don't You Worry Child", artist: 'Swedish House Mafia', bpm: 128, key: 'Gm', emoji: '🙌' },
+        { name: 'Alive', artist: 'Krewella', bpm: 128, key: 'Am', emoji: '⚡' },
+        { name: 'Levels', artist: 'Avicii', bpm: 126, key: 'Cm', emoji: '📈' }
+    ]
+};
+
+function showMoodTracks(btn, mood) {
+    document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const tracks = MOOD_TRACKS[mood];
+    const container = document.getElementById('trackResults');
+    container.innerHTML = tracks.map(t => `
+        <div class="track-card">
+            <div class="track-art">${t.emoji}</div>
+            <div class="track-info">
+                <div class="ti-name">${t.name}</div>
+                <div class="ti-artist">${t.artist}</div>
+            </div>
+            <div class="track-meta">
+                <div class="tm-bpm">${t.bpm} BPM</div>
+                <div>${t.key}</div>
+            </div>
+        </div>
+    `).join('');
+    container.classList.add('visible');
+}
+
+/* --- AI Generation --- */
+function buildGenerationExperience(name, modeName) {
+    return `
+        <div class="experience-title">
+            <h2>${modeName}</h2>
+            <p>Pick a genre. Generate a beat.</p>
+        </div>
+        <div class="genre-grid">
+            <div class="genre-btn" onclick="generateBeat(this, 'progressive')">🌊 Progressive House</div>
+            <div class="genre-btn" onclick="generateBeat(this, 'techno')">⚡ Techno</div>
+            <div class="genre-btn" onclick="generateBeat(this, 'deephouse')">🎧 Deep House</div>
+            <div class="genre-btn" onclick="generateBeat(this, 'ambient')">🌙 Ambient</div>
+        </div>
+        <div class="gen-result" id="genResult"></div>`;
+}
+
+const GEN_DATA = {
+    progressive: { bpm: 128, key: 'Am', bars: 32, name: 'Progressive House Beat' },
+    techno: { bpm: 134, key: 'Dm', bars: 16, name: 'Techno Loop' },
+    deephouse: { bpm: 122, key: 'Fm', bars: 32, name: 'Deep House Groove' },
+    ambient: { bpm: 90, key: 'Cm', bars: 64, name: 'Ambient Texture' }
+};
+
+function generateBeat(btn, genre) {
+    document.querySelectorAll('.genre-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const d = GEN_DATA[genre];
+    const container = document.getElementById('genResult');
+    container.innerHTML = `
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:16px;">
+            <div style="text-align:center;margin-bottom:8px;">
+                <span style="font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:700;color:#FFE082;">${d.name}</span>
+            </div>
+            <div class="waveform-placeholder"></div>
+            <div class="gen-details">
+                <div class="gen-detail-item">
+                    <div class="gd-label">BPM</div>
+                    <div class="gd-value">${d.bpm}</div>
+                </div>
+                <div class="gen-detail-item">
+                    <div class="gd-label">Key</div>
+                    <div class="gd-value">${d.key}</div>
+                </div>
+                <div class="gen-detail-item">
+                    <div class="gd-label">Bars</div>
+                    <div class="gd-value">${d.bars}</div>
+                </div>
+            </div>
+        </div>`;
+    container.classList.add('visible');
+}
+
+/* --- Default Experience (for modes without custom UI) --- */
+const MODE_SAMPLES = {
+    stems: [
+        { icon: '🔀', title: 'Separate a track', body: 'Drop any audio file and split it into vocals, drums, bass, and other.', response: 'Processing "Opus - Eric Prydz"... Separation complete.<br><br><strong>4 stems extracted:</strong><br>&bull; Vocals (isolated pads and vocal chops)<br>&bull; Drums (kick, hi-hats, claps)<br>&bull; Bass (sub-bass and mid-bass)<br>&bull; Other (synths, effects, atmospherics)<br><br>Each stem exported as 48kHz WAV. Ready for remix.' },
+        { icon: '🎛️', title: 'Re-balance a mix', body: 'Adjust individual stem volumes after separation.', response: 'Stem mixer loaded. Current levels:<br>&bull; Vocals: 0 dB<br>&bull; Drums: +2 dB<br>&bull; Bass: -1 dB<br>&bull; Other: 0 dB<br><br>Drag sliders to rebalance. Export when ready.' },
+        { icon: '🎤', title: 'Extract acapella', body: 'Pull clean vocals from any track for remixes.', response: 'Acapella extraction uses our vocal isolation AI. Results are studio-quality at 48kHz. Works best on tracks with clear vocal sections. Processing time: ~30 seconds per track.' }
+    ],
+    events: [
+        { icon: '📍', title: 'Find events near me', body: 'Discover DJ sets, festivals, and live shows in your area.', response: 'Scanning events near Chicago, IL:<br><br>&bull; <strong>Prydz HOLOSPHERE</strong> - United Center, Mar 15<br>&bull; <strong>Lane 8 Brightest Lights Tour</strong> - Concord Music Hall, Mar 22<br>&bull; <strong>Spring Awakening Festival</strong> - Addams Park, Jun 12-14<br>&bull; <strong>Solomun +1</strong> - Radius Chicago, Apr 5' },
+        { icon: '🎟️', title: 'Track an artist', body: 'Get notified when your favorite artists announce shows.', response: 'Artist tracking enabled. We monitor tour announcements, festival lineups, and pop-up events. You\'ll get alerts for any artist in your library.' },
+        { icon: '🌍', title: 'Festival calendar', body: 'See all major electronic music festivals worldwide.', response: 'Global festival calendar loaded. Filtered to electronic/dance:<br><br>&bull; Tomorrowland (Belgium) - Jul 18-27<br>&bull; Movement (Detroit) - May 24-26<br>&bull; ADE (Amsterdam) - Oct 15-19<br>&bull; Ultra (Miami) - Mar 28-30' }
+    ],
+    setbuilder: [
+        { icon: '📋', title: 'Build a set from scratch', body: 'Start with a vibe, end with a complete tracklist.', response: 'Set Builder wizard started.<br><br><strong>Step 1:</strong> Choose your vibe (Deep / Melodic / Peak Time / Journey)<br><strong>Step 2:</strong> Set duration (1hr / 2hr / 3hr / Custom)<br><strong>Step 3:</strong> Pick opening track<br><strong>Step 4:</strong> AI suggests next tracks based on key, energy, and BPM flow<br><br>Each suggestion includes transition notes.' },
+        { icon: '🔑', title: 'Harmonic matching', body: 'Find tracks that mix perfectly with your current selection.', response: 'Harmonic matching uses the Camelot wheel system. For your current track in 8A (Am), compatible keys:<br><br>&bull; 8A (Am) - same key<br>&bull; 7A (Dm) - energy down<br>&bull; 9A (Em) - energy up<br>&bull; 8B (C) - mood shift<br><br>29 tracks in your library match these keys.' },
+        { icon: '📊', title: 'Energy flow analysis', body: 'Visualize the energy curve of your entire set.', response: 'Energy flow maps each track on a 1-10 scale. The ideal set follows a wave pattern: build &rarr; peak &rarr; breathe &rarr; build higher &rarr; peak &rarr; cool down. Upload your tracklist for a full analysis.' }
+    ],
+    archive: [
+        { icon: '💾', title: 'Upload a recorded mix', body: 'Store your mixes with auto-tagged metadata.', response: 'Mix uploaded. Auto-analysis complete:<br><br>&bull; Duration: 1:47:32<br>&bull; Average BPM: 123<br>&bull; Key range: Am - Fm<br>&bull; Track count: ~22 (detected)<br>&bull; Energy peak: 1:12:00 mark<br><br>Mix stored in your archive. Accessible from any device.' },
+        { icon: '📈', title: 'Compare mixes', body: 'See how your mixing style has evolved over time.', response: 'Mix comparison shows your progression across uploads. We track transition smoothness, energy flow consistency, key compatibility percentage, and crowd engagement patterns.' },
+        { icon: '🔍', title: 'Search your archive', body: 'Find mixes by date, genre, BPM range, or mood.', response: 'Search your full archive with filters:<br>&bull; Date range<br>&bull; Genre tags<br>&bull; BPM range<br>&bull; Duration<br>&bull; Venue/event name<br><br>All mixes are timestamped and searchable.' }
+    ],
+    tools: [
+        { icon: '🛠️', title: 'Reference track analysis', body: 'Analyze any track for production insights.', response: 'Reference analysis breaks down:<br><br>&bull; Frequency spectrum (sub, low, mid, high, air)<br>&bull; Stereo imaging per band<br>&bull; Dynamic range and compression<br>&bull; Arrangement structure (intro, build, drop, breakdown)<br>&bull; Sound design elements detected<br><br>Compare against your own tracks for A/B mastering.' },
+        { icon: '🎼', title: 'Scale finder', body: 'Find the right scale for your melody.', response: 'Hum or play a melody. The scale finder identifies:<br>&bull; Root note<br>&bull; Scale type (major, minor, dorian, mixolydian, etc.)<br>&bull; Compatible chord progressions<br>&bull; Suggested bassline patterns<br><br>Works with audio input or MIDI.' },
+        { icon: '🥁', title: 'Drum pattern grid', body: 'Build drum patterns with genre-specific templates.', response: 'Drum grid loaded with templates:<br><br>&bull; Four-on-the-floor (House)<br>&bull; Offbeat hi-hats (Techno)<br>&bull; Broken beat (UK Garage)<br>&bull; Polyrhythmic (Afro House)<br>&bull; Minimal (Deep Tech)<br><br>16-step sequencer with swing and velocity control.' }
+    ],
+    dashboard: [
+        { icon: '📊', title: 'Your production stats', body: 'Track your workflow, output, and growth.', response: 'Dashboard shows your activity:<br><br>&bull; Tracks mastered this month: 12<br>&bull; Sets built: 3<br>&bull; Stems separated: 8<br>&bull; Discovery sessions: 15<br>&bull; Total production time: 47 hours<br><br>You\'re 23% more productive than last month.' },
+        { icon: '🎯', title: 'Goals and streaks', body: 'Set production goals and track your consistency.', response: 'Active goals:<br>&bull; Master 1 track per week (3/4 complete)<br>&bull; Build 2 sets per month (1/2 complete)<br>&bull; 30-day production streak (day 18)<br><br>Consistency is the secret. Keep going.' },
+        { icon: '📁', title: 'Project overview', body: 'See all your active projects in one place.', response: 'Active projects:<br><br>&bull; "Late Night Sessions EP" - 3/5 tracks mastered<br>&bull; "Summer Festival Set" - tracklist 80% done<br>&bull; "Remix Pack Vol. 2" - stems separated, mixing next<br><br>All projects sync across devices.' }
+    ]
+};
+
+function buildDefaultExperience(name, modeName) {
+    const samples = MODE_SAMPLES[selectedMode] || MODE_SAMPLES.tools;
+    const cards = samples.map((s, i) => `
+        <div class="sample-card" onclick="toggleSampleCard(this)">
+            <div class="sc-header">
+                <span class="sc-icon">${s.icon}</span>
+                <span class="sc-title">${s.title}</span>
+            </div>
+            <div class="sc-body">${s.body}</div>
+            <div class="sc-response">${s.response}</div>
+        </div>
+    `).join('');
+
+    return `
+        <div class="experience-title">
+            <h2>${modeName}</h2>
+            <p>Tap a card to see it in action</p>
+        </div>
+        <div class="sample-cards">${cards}</div>`;
+}
+
+function toggleSampleCard(el) {
+    el.classList.toggle('expanded');
+}
+</script>
+</body>
+</html>
