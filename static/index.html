@@ -1061,6 +1061,16 @@
 <div class="app-footer">POWERED BY CAPO AI</div>
 
 <script>
+/* ===== API HELPER ===== */
+function showNotConfigured(container, modeName) {
+    container.innerHTML = `
+        <div style="text-align:center;padding:40px 20px;">
+            <div style="font-size:2.5rem;margin-bottom:12px;">🔧</div>
+            <div style="font-family:'Playfair Display',serif;font-size:1.2rem;color:#FFE082;margin-bottom:8px;">${modeName} — Coming Soon</div>
+            <div style="font-size:0.8rem;color:#8A7A5A;max-width:400px;margin:0 auto;">This mode requires API keys to be configured. Connect your keys in the Render dashboard to activate.</div>
+        </div>`;
+}
+
 /* ===== STATE ===== */
 let currentStep = 0;
 let selectedRole = null;
@@ -2034,7 +2044,7 @@ function sendJAWFreeInput() {
     .catch(() => {
         const el = document.getElementById('jawFree');
         if (el) {
-            el.innerHTML = `<div class="msg-label">J.A.W.</div>Connection error. Try again.`;
+            el.innerHTML = `<div class="msg-label">J.A.W.</div>AI not connected yet. Configure Azure OpenAI keys to activate live chat.`;
             el.removeAttribute('id');
         }
     });
