@@ -327,12 +327,12 @@ async def _try_youtube_description(url: str) -> dict | None:
 
     try:
         async with httpx.AsyncClient(timeout=15) as client:
-            # Use YouTube's internal player API — works from cloud IPs, no auth needed
+            # Use YouTube's internal player API with ANDROID client — bypasses cloud IP blocking
             api_resp = await client.post(
                 "https://www.youtube.com/youtubei/v1/player",
                 json={
                     "videoId": video_id,
-                    "context": {"client": {"clientName": "WEB", "clientVersion": "2.20240101.00.00"}},
+                    "context": {"client": {"clientName": "ANDROID", "clientVersion": "19.09.37", "androidSdkVersion": 30}},
                 },
                 headers={"Content-Type": "application/json"},
             )
@@ -1672,7 +1672,7 @@ async def debug_youtube(video_id: str):
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.post(
                 "https://www.youtube.com/youtubei/v1/player",
-                json={"videoId": video_id, "context": {"client": {"clientName": "WEB", "clientVersion": "2.20240101.00.00"}}},
+                json={"videoId": video_id, "context": {"client": {"clientName": "ANDROID", "clientVersion": "19.09.37", "androidSdkVersion": 30}}},
                 headers={"Content-Type": "application/json"},
             )
         data = resp.json()
