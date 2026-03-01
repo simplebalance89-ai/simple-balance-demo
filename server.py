@@ -17,6 +17,8 @@ from openai import AzureOpenAI
 
 logger = logging.getLogger(__name__)
 
+_SERVER_START_TIME = time.time()
+
 app = FastAPI(title="Simple Balance Music")
 
 # ── YouTube Cookies (decoded from env var at startup) ─────────────────────────
@@ -212,6 +214,27 @@ async def chat(payload: dict):
 
 _download_jobs = {}  # {job_id: {status, metadata, file_path, error, started_at}}
 
+# ── Job History (for admin dashboard) ────────────────────────────────────────
+_job_history = []  # max 100 entries, FIFO
+
+
+def _record_job_history(job_type: str, job_id: str, status: str, metadata: dict | None = None,
+                        error: str | None = None, started_at: float = 0, **extras):
+    """Record a completed/failed job for admin visibility."""
+    entry = {
+        "type": job_type,
+        "job_id": job_id,
+        "status": status,
+        "title": (metadata or {}).get("title", "Unknown"),
+        "error": error,
+        "elapsed": round(time.time() - started_at) if started_at else 0,
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    entry.update(extras)
+    _job_history.append(entry)
+    if len(_job_history) > 100:
+        _job_history.pop(0)
+
 
 async def _run_download_job(job_id: str, url: str):
     """Background coroutine: download audio via yt-dlp and convert to mp3."""
@@ -225,6 +248,7 @@ async def _run_download_job(job_id: str, url: str):
         if "error" in info:
             job["status"] = "failed"
             job["error"] = info["error"]
+            _record_job_history("download", job_id, "failed", error=info["error"], started_at=job["started_at"])
             return
 
         title = info.get("title", "audio")
@@ -262,6 +286,7 @@ async def _run_download_job(job_id: str, url: str):
         if dl_result.returncode != 0:
             job["status"] = "failed"
             job["error"] = f"Download failed: {dl_result.stderr.strip()[:300]}"
+            _record_job_history("download", job_id, "failed", job["metadata"], job["error"], job["started_at"])
             return
 
         # yt-dlp may output as .mp3 directly or we need to find the file
@@ -270,20 +295,25 @@ async def _run_download_job(job_id: str, url: str):
         if not matches:
             job["status"] = "failed"
             job["error"] = "Download completed but no file found."
+            _record_job_history("download", job_id, "failed", job["metadata"], job["error"], job["started_at"])
             return
 
         job["file_path"] = matches[0]
         job["status"] = "done"
         file_size = os.path.getsize(matches[0])
         logger.info("Download complete: %s (%.1f MB)", safe_title, file_size / 1024 / 1024)
+        _record_job_history("download", job_id, "done", job["metadata"], started_at=job["started_at"],
+                            file_size=f"{file_size / 1024 / 1024:.1f} MB")
 
     except subprocess.TimeoutExpired:
         job["status"] = "failed"
         job["error"] = "Download timed out (10 min). Try a shorter video."
+        _record_job_history("download", job_id, "failed", job.get("metadata"), job["error"], job["started_at"])
     except Exception as e:
         logger.error("Download job %s failed: %s", job_id, e)
         job["status"] = "failed"
         job["error"] = str(e)
+        _record_job_history("download", job_id, "failed", job.get("metadata"), str(e), job["started_at"])
 
 
 @app.post("/api/download/audio")
@@ -736,6 +766,8 @@ async def _run_digest_job(job_id: str, url: str):
                 job["result"] = yt_result
                 job["status"] = "done"
                 logger.info("YouTube description tracklist: %s — %d tracks", yt_result["metadata"]["title"], len(yt_result["tracks"]))
+                _record_job_history("digest", job_id, "done", yt_result["metadata"], started_at=job["started_at"],
+                                    tracks_found=len(yt_result["tracks"]))
                 return
 
             # No description tracklist — try audio fingerprinting if cookies available
@@ -755,6 +787,7 @@ async def _run_digest_job(job_id: str, url: str):
                     pass
                 job["status"] = "failed"
                 job["error"] = "YouTube audio fingerprinting isn't available yet. Try a SoundCloud or Mixcloud link instead — those work instantly. Or upload the audio file directly using the Upload tab."
+                _record_job_history("digest", job_id, "failed", job.get("metadata"), job["error"], job["started_at"])
                 return
             # Has cookies — fall through to yt-dlp + AudD pipeline
             logger.info("YouTube: no description tracklist, trying audio fingerprint with cookies for %s", url)
@@ -766,6 +799,7 @@ async def _run_digest_job(job_id: str, url: str):
         if "error" in info:
             job["status"] = "failed"
             job["error"] = info["error"]
+            _record_job_history("digest", job_id, "failed", error=info["error"], started_at=job["started_at"])
             return
 
         job["metadata"] = {
@@ -800,6 +834,7 @@ async def _run_digest_job(job_id: str, url: str):
         if dl_result.returncode != 0:
             job["status"] = "failed"
             job["error"] = f"Download failed: {dl_result.stderr.strip()[:300]}"
+            _record_job_history("digest", job_id, "failed", job["metadata"], job["error"], job["started_at"])
             return
 
         # Find the downloaded file
@@ -808,6 +843,7 @@ async def _run_digest_job(job_id: str, url: str):
         if not matches:
             job["status"] = "failed"
             job["error"] = "Download completed but no file found."
+            _record_job_history("digest", job_id, "failed", job["metadata"], job["error"], job["started_at"])
             return
         tmp_path = matches[0]
         file_size = os.path.getsize(tmp_path)
@@ -829,17 +865,22 @@ async def _run_digest_job(job_id: str, url: str):
         job["status"] = "done"
         logger.info("Digest complete: %s — %d tracks from %d chunks",
                      job["metadata"]["title"], len(parsed.get("tracks", [])), parsed.get("chunks_scanned", 1))
+        _record_job_history("digest", job_id, "done", job["metadata"], started_at=job["started_at"],
+                            tracks_found=len(parsed.get("tracks", [])), chunks=parsed.get("chunks_scanned", 1))
 
     except subprocess.TimeoutExpired:
         job["status"] = "failed"
         job["error"] = "Audio download timed out (5 min). Try a shorter mix."
+        _record_job_history("digest", job_id, "failed", job.get("metadata"), job["error"], job["started_at"])
     except httpx.TimeoutException:
         job["status"] = "failed"
         job["error"] = "AudD processing timed out (15 min). The mix may be too long."
+        _record_job_history("digest", job_id, "failed", job.get("metadata"), job["error"], job["started_at"])
     except Exception as e:
         logger.error("Digest job %s failed: %s", job_id, e)
         job["status"] = "failed"
         job["error"] = str(e)
+        _record_job_history("digest", job_id, "failed", job.get("metadata"), str(e), job["started_at"])
     finally:
         # Clean up temp file
         if tmp_path and os.path.exists(tmp_path):
@@ -1975,6 +2016,74 @@ async def api_status():
         "spotify": bool(get_secret("SPOTIFY_CLIENT_ID") and get_secret("SPOTIFY_CLIENT_SECRET")),
         "tidal": bool(get_secret("TIDAL_CLIENT_ID") and get_secret("TIDAL_CLIENT_SECRET")),
     }
+
+
+# ── Admin Dashboard ──────────────────────────────────────────────────────────
+
+@app.get("/api/admin/summary")
+async def admin_summary():
+    """Admin dashboard summary: services, server info, active jobs, job history."""
+    import platform
+    import sys
+
+    uptime_secs = int(time.time() - _SERVER_START_TIME)
+    hours, remainder = divmod(uptime_secs, 3600)
+    minutes, secs = divmod(remainder, 60)
+    uptime_str = f"{hours}h {minutes}m {secs}s"
+
+    # Tool versions (safe — no git CLI needed)
+    yt_dlp_ver = "unknown"
+    ffmpeg_ver = "unknown"
+    try:
+        r = subprocess.run(["yt-dlp", "--version"], capture_output=True, text=True, timeout=5)
+        if r.returncode == 0:
+            yt_dlp_ver = r.stdout.strip()
+    except Exception:
+        pass
+    try:
+        r = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True, timeout=5)
+        if r.returncode == 0:
+            ffmpeg_ver = r.stdout.split("\n")[0].split("version ")[-1].split(" ")[0] if "version" in r.stdout else r.stdout.split("\n")[0]
+    except Exception:
+        pass
+
+    # Active jobs
+    active_downloads = {k: {"status": v["status"], "title": (v.get("metadata") or {}).get("title", "Unknown"),
+                             "elapsed": round(time.time() - v["started_at"])}
+                        for k, v in _download_jobs.items() if v["status"] not in ("done", "failed")}
+    active_digests = {k: {"status": v["status"], "title": (v.get("metadata") or {}).get("title", "Unknown"),
+                          "elapsed": round(time.time() - v["started_at"]),
+                          "scan_progress": v.get("scan_progress")}
+                      for k, v in _digest_jobs.items() if v["status"] not in ("done", "failed")}
+
+    return {
+        "services": {
+            "azure_openai": bool(get_secret("AZURE_OPENAI_ENDPOINT") and get_secret("AZURE_OPENAI_KEY")),
+            "audd": bool(get_secret("AUDD_API_TOKEN")),
+            "replicate": bool(get_secret("REPLICATE_API_TOKEN")),
+            "spotify": bool(get_secret("SPOTIFY_CLIENT_ID") and get_secret("SPOTIFY_CLIENT_SECRET")),
+            "tidal": bool(get_secret("TIDAL_CLIENT_ID") and get_secret("TIDAL_CLIENT_SECRET")),
+        },
+        "server": {
+            "uptime": uptime_str,
+            "uptime_seconds": uptime_secs,
+            "git_commit": os.environ.get("RENDER_GIT_COMMIT", "local"),
+            "yt_dlp_version": yt_dlp_ver,
+            "ffmpeg_version": ffmpeg_ver,
+            "python_version": sys.version.split()[0],
+        },
+        "active_jobs": {
+            "downloads": active_downloads,
+            "digests": active_digests,
+        },
+        "job_history": _job_history[-20:],
+        "spotify_sessions_active": len(_spotify_user_sessions),
+    }
+
+
+@app.get("/admin")
+async def admin_page():
+    return FileResponse("static/admin.html")
 
 
 # ── Static + Health ───────────────────────────────────────────────────────────

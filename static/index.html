@@ -1090,6 +1090,21 @@
                 </div>
                 <div style="font-size:0.7rem;color:#D4A017;margin-bottom:8px;">Search and click <strong>+ Add</strong> to build your profile</div>
                 <div id="profileTrackBadge" style="font-size:0.7rem;color:#4CAF50;margin-bottom:8px;display:none;"></div>
+                <div style="display:flex;gap:8px;margin-bottom:8px;">
+                    <select id="spotifyGenreFilter" style="padding:8px 10px;border-radius:8px;border:1px solid #333;background:#1a1a2e;color:#fff;font-family:'Nunito',sans-serif;font-size:0.75rem;cursor:pointer;">
+                        <option value="">All Genres</option>
+                        <option value="techno">Techno</option>
+                        <option value="house">House</option>
+                        <option value="melodic techno">Melodic Techno</option>
+                        <option value="deep house">Deep House</option>
+                        <option value="minimal">Minimal</option>
+                        <option value="trance">Trance</option>
+                        <option value="progressive">Progressive</option>
+                        <option value="drum and bass">Drum & Bass</option>
+                        <option value="ambient">Ambient</option>
+                        <option value="downtempo">Downtempo</option>
+                    </select>
+                </div>
                 <div style="display:flex;gap:8px;margin-bottom:12px;">
                     <input type="text" id="spotifySearchInput" placeholder="Search tracks, artists..." style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid #333;background:#1a1a2e;color:#fff;font-family:'Nunito',sans-serif;font-size:0.8rem;" onkeydown="if(event.key==='Enter')spotifySearch()">
                     <button onclick="spotifySearch()" style="padding:8px 16px;border-radius:8px;border:none;background:#1DB954;color:#fff;font-weight:700;cursor:pointer;font-size:0.8rem;">Search</button>
@@ -1104,6 +1119,21 @@
             <div style="background:rgba(0,255,255,0.06);border:1px solid rgba(0,255,255,0.2);border-radius:12px;padding:16px;">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
                     <span style="font-family:'Playfair Display',serif;font-size:1rem;color:#00FFFF;">Tidal Connected</span>
+                </div>
+                <div style="display:flex;gap:8px;margin-bottom:8px;">
+                    <select id="tidalGenreFilter" style="padding:8px 10px;border-radius:8px;border:1px solid #333;background:#1a1a2e;color:#fff;font-family:'Nunito',sans-serif;font-size:0.75rem;cursor:pointer;">
+                        <option value="">All Genres</option>
+                        <option value="techno">Techno</option>
+                        <option value="house">House</option>
+                        <option value="melodic techno">Melodic Techno</option>
+                        <option value="deep house">Deep House</option>
+                        <option value="minimal">Minimal</option>
+                        <option value="trance">Trance</option>
+                        <option value="progressive">Progressive</option>
+                        <option value="drum and bass">Drum & Bass</option>
+                        <option value="ambient">Ambient</option>
+                        <option value="downtempo">Downtempo</option>
+                    </select>
                 </div>
                 <div style="display:flex;gap:8px;margin-bottom:12px;">
                     <input type="text" id="tidalSearchInput" placeholder="Search tracks on Tidal..." style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid #333;background:#1a1a2e;color:#fff;font-family:'Nunito',sans-serif;font-size:0.8rem;" onkeydown="if(event.key==='Enter')tidalSearch()">
@@ -1403,6 +1433,7 @@ function updateModeCards() {
 let spotifyConnected = false;
 let spotifySession = localStorage.getItem('spotify_session') || '';
 let spotifyUserInfo = null;
+let _spotifyValidating = false;
 
 // On page load — check for OAuth callback or saved session
 (function checkSpotifySession() {
@@ -1433,6 +1464,7 @@ let spotifyUserInfo = null;
 })();
 
 async function loadSpotifyUser(session) {
+    _spotifyValidating = true;
     try {
         const res = await fetch(`/api/spotify/me?session=${session}`);
         if (!res.ok) throw new Error('Session expired');
@@ -1454,8 +1486,25 @@ async function loadSpotifyUser(session) {
         loadUserPlaylists(session);
         enableStep1Continue();
     } catch (e) {
+        // Session expired (server restarted or token invalid) — clear everything
         localStorage.removeItem('spotify_session');
         spotifySession = '';
+        spotifyConnected = false;
+        spotifyUserInfo = null;
+        const card = document.getElementById('spotifyCard');
+        if (card) {
+            card.classList.remove('connected');
+            card.style.opacity = '1';
+            card.onclick = function(){ connectSpotify(); };
+            card.querySelector('.cc-status').innerHTML = '<span style="color:#D4A017;">Session expired — click to reconnect</span>';
+        }
+        // Hide library panel
+        const lib = document.getElementById('spotifyLibrary');
+        if (lib) lib.style.display = 'none';
+        // Fall back to client credentials after 5s
+        setTimeout(() => { if (!spotifyConnected) connectSpotifyClientCreds(); }, 5000);
+    } finally {
+        _spotifyValidating = false;
     }
 }
 
@@ -1486,10 +1535,32 @@ async function loadUserPlaylists(session) {
 async function connectSpotify() {
     const card = document.getElementById('spotifyCard');
     if (!card) return;
-    // If already have a session, just reload user
-    if (spotifySession) {
-        await loadSpotifyUser(spotifySession);
+    // Prevent clicks during validation
+    if (_spotifyValidating) {
+        card.querySelector('.cc-status').innerHTML = '<span style="color:#D4A017;">Checking session...</span>';
         return;
+    }
+    // If already have a session, validate server-side first
+    if (spotifySession) {
+        _spotifyValidating = true;
+        card.querySelector('.cc-status').innerHTML = '<span style="color:#D4A017;">Validating session...</span>';
+        try {
+            const res = await fetch(`/api/spotify/me?session=${spotifySession}`);
+            if (res.ok) {
+                await loadSpotifyUser(spotifySession);
+                return;
+            }
+            // Session invalid — clear and proceed to OAuth
+            localStorage.removeItem('spotify_session');
+            spotifySession = '';
+            spotifyConnected = false;
+            spotifyUserInfo = null;
+        } catch (e) {
+            localStorage.removeItem('spotify_session');
+            spotifySession = '';
+        } finally {
+            _spotifyValidating = false;
+        }
     }
     // Try OAuth login via popup
     try {
@@ -1597,8 +1668,13 @@ async function loadPlaylistTracks(playlistId, playlistName) {
 }
 
 async function spotifySearch() {
-    const query = document.getElementById('spotifySearchInput').value.trim();
-    if (!query) return;
+    const rawQuery = document.getElementById('spotifySearchInput').value.trim();
+    const genre = document.getElementById('spotifyGenreFilter').value;
+    if (!rawQuery && !genre) return;
+    let query = rawQuery;
+    if (genre) {
+        query = query ? `genre:"${genre}" ${query}` : `genre:"${genre}"`;
+    }
     const results = document.getElementById('spotifyResults');
     results.innerHTML = '<div style="text-align:center;padding:12px;color:#888;font-size:0.8rem;">Searching...</div>';
     try {
@@ -1671,8 +1747,13 @@ async function connectTidal() {
 }
 
 async function tidalSearch() {
-    const query = document.getElementById('tidalSearchInput').value.trim();
-    if (!query) return;
+    const rawQuery = document.getElementById('tidalSearchInput').value.trim();
+    const genre = document.getElementById('tidalGenreFilter').value;
+    if (!rawQuery && !genre) return;
+    let query = rawQuery;
+    if (genre) {
+        query = query ? `${genre} ${query}` : genre;
+    }
     const results = document.getElementById('tidalResults');
     results.innerHTML = '<div style="text-align:center;padding:12px;color:#888;font-size:0.8rem;">Searching Tidal...</div>';
     try {
