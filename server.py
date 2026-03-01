@@ -1664,6 +1664,35 @@ async def api_status():
 
 # ── Static + Health ───────────────────────────────────────────────────────────
 
+@app.get("/api/debug/yt/{video_id}")
+async def debug_youtube(video_id: str):
+    """Temporary debug endpoint to test YouTube API from Render."""
+    import re as _re
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                "https://www.youtube.com/youtubei/v1/player",
+                json={"videoId": video_id, "context": {"client": {"clientName": "WEB", "clientVersion": "2.20240101.00.00"}}},
+                headers={"Content-Type": "application/json"},
+            )
+        data = resp.json()
+        vd = data.get("videoDetails", {})
+        desc = vd.get("shortDescription", "")
+        tracks = _re.findall(r'(?:^|\n)\s*(?:\d+[\.\)]\s*)?(\d{1,2}:\d{2}(?::\d{2})?)\s+(.+)', desc)
+        return {
+            "status_code": resp.status_code,
+            "has_video_details": bool(vd),
+            "title": vd.get("title"),
+            "author": vd.get("author"),
+            "desc_length": len(desc),
+            "desc_preview": desc[:500],
+            "timestamp_tracks": len(tracks),
+            "playability": data.get("playabilityStatus", {}).get("status"),
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
