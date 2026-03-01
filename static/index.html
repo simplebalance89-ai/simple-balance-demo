@@ -1068,6 +1068,12 @@
                 <div class="cc-status" style="color:#22c55e;">AudD Digestor</div>
                 <input type="file" id="step1MixFile" accept="audio/*" style="display:none" onchange="uploadMixStep1(this)">
             </div>
+            <!-- Digest URL -->
+            <div class="connect-card" onclick="showDigestUrlPanel()" id="digestUrlCard" style="border-color:rgba(212,160,23,0.3);">
+                <div class="cc-icon">🔗</div>
+                <div class="cc-name"><span class="status-badge badge-green"></span>Digest URL</div>
+                <div class="cc-status" style="color:#22c55e;">YouTube / SoundCloud</div>
+            </div>
             <!-- Build Profile (manual) -->
             <div class="connect-card" id="buildProfileCard" onclick="showBuildProfile()" style="border-color:rgba(212,160,23,0.3);">
                 <div class="cc-icon">🎯</div>
@@ -1121,6 +1127,25 @@
                 <div id="buildProfileResults" style="display:none;margin-top:12px;"></div>
             </div>
         </div>
+        <!-- URL Digest Panel (hidden until Digest URL clicked) -->
+        <div id="digestUrlPanel" style="display:none;margin-top:16px;width:100%;max-width:500px;">
+            <div style="background:rgba(212,160,23,0.08);border:1px solid rgba(212,160,23,0.25);border-radius:12px;padding:16px;">
+                <div style="font-family:'Playfair Display',serif;font-size:1rem;color:#FFE082;margin-bottom:4px;">Paste a Link</div>
+                <div style="font-size:0.7rem;color:#8A7A5A;margin-bottom:12px;">YouTube, SoundCloud, or Mixcloud — we'll extract the tracklist</div>
+                <div style="display:flex;gap:8px;margin-bottom:10px;">
+                    <input type="text" id="step1UrlInput" placeholder="https://youtube.com/watch?v=..." style="flex:1;padding:10px 14px;border-radius:10px;border:1px solid #333;background:#1a1a2e;color:#fff;font-family:'Nunito',sans-serif;font-size:0.85rem;" onkeydown="if(event.key==='Enter')digestUrlStep1()">
+                    <button onclick="digestUrlStep1()" style="padding:10px 20px;border-radius:10px;border:none;background:linear-gradient(135deg,#D4A017,#B8860B);color:#0D0D1A;font-weight:800;cursor:pointer;font-family:'Nunito',sans-serif;font-size:0.85rem;">Digest</button>
+                </div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                    <span style="font-size:0.6rem;background:rgba(255,0,0,0.15);color:#FF4444;padding:3px 8px;border-radius:6px;">YouTube</span>
+                    <span style="font-size:0.6rem;background:rgba(255,85,0,0.15);color:#FF5500;padding:3px 8px;border-radius:6px;">SoundCloud</span>
+                    <span style="font-size:0.6rem;background:rgba(124,58,237,0.15);color:#7C3AED;padding:3px 8px;border-radius:6px;">Mixcloud</span>
+                </div>
+            </div>
+        </div>
+        <div id="step1UrlStatus" style="display:none;margin-top:12px;width:100%;max-width:500px;text-align:center;"></div>
+        <div id="step1UrlMeta" style="display:none;margin-top:12px;width:100%;max-width:500px;"></div>
+        <div id="step1UrlResults" style="display:none;margin-top:12px;width:100%;max-width:500px;"></div>
         <!-- Mix upload status -->
         <div id="step1MixStatus" style="display:none;margin-top:16px;width:100%;max-width:500px;text-align:center;"></div>
         <div id="step1MixResults" style="display:none;margin-top:12px;width:100%;max-width:500px;"></div>
@@ -2477,14 +2502,39 @@ function buildDigestorExperience(name, modeName) {
     return `
         <div class="experience-title">
             <h2>${modeName}</h2>
-            <p>Upload a DJ mix. Get the full tracklist.</p>
+            <p>Upload a mix or paste a link. Get the full tracklist.</p>
         </div>
         <div style="width:100%;max-width:600px;">
-            <div style="background:rgba(255,255,255,0.03);border:2px dashed rgba(212,160,23,0.3);border-radius:16px;padding:32px;text-align:center;margin-bottom:16px;cursor:pointer;" onclick="document.getElementById('mixFile').click()" id="dropZone">
-                <div style="font-size:2.5rem;margin-bottom:8px;">🔬</div>
-                <div style="font-family:'Playfair Display',serif;font-size:1.1rem;color:#FFE082;margin-bottom:4px;">Drop your mix here</div>
-                <div style="font-size:0.75rem;color:#8A7A5A;">MP3, WAV, M4A, FLAC — up to 500MB</div>
-                <input type="file" id="mixFile" accept="audio/*" style="display:none" onchange="uploadMix(this)">
+            <!-- Tab Toggle -->
+            <div style="display:flex;gap:0;margin-bottom:16px;background:rgba(255,255,255,0.03);border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.06);">
+                <button id="digestTabUpload" onclick="switchDigestTab('upload')" style="flex:1;padding:12px;border:none;background:rgba(212,160,23,0.15);color:#D4A017;font-family:'Nunito',sans-serif;font-size:0.85rem;font-weight:700;cursor:pointer;transition:all 0.3s;">Upload a Mix</button>
+                <button id="digestTabUrl" onclick="switchDigestTab('url')" style="flex:1;padding:12px;border:none;background:transparent;color:#666;font-family:'Nunito',sans-serif;font-size:0.85rem;font-weight:700;cursor:pointer;transition:all 0.3s;">Paste a Link</button>
+            </div>
+            <!-- Upload Tab -->
+            <div id="digestUploadPane">
+                <div style="background:rgba(255,255,255,0.03);border:2px dashed rgba(212,160,23,0.3);border-radius:16px;padding:32px;text-align:center;margin-bottom:16px;cursor:pointer;" onclick="document.getElementById('mixFile').click()" id="dropZone">
+                    <div style="font-size:2.5rem;margin-bottom:8px;">🔬</div>
+                    <div style="font-family:'Playfair Display',serif;font-size:1.1rem;color:#FFE082;margin-bottom:4px;">Drop your mix here</div>
+                    <div style="font-size:0.75rem;color:#8A7A5A;">MP3, WAV, M4A, FLAC — up to 500MB</div>
+                    <input type="file" id="mixFile" accept="audio/*" style="display:none" onchange="uploadMix(this)">
+                </div>
+            </div>
+            <!-- URL Tab -->
+            <div id="digestUrlPane" style="display:none;">
+                <div style="background:rgba(212,160,23,0.06);border:1px solid rgba(212,160,23,0.2);border-radius:16px;padding:24px;text-align:center;margin-bottom:16px;">
+                    <div style="font-size:2rem;margin-bottom:8px;">🔗</div>
+                    <div style="font-family:'Playfair Display',serif;font-size:1rem;color:#FFE082;margin-bottom:4px;">Paste a set URL</div>
+                    <div style="font-size:0.7rem;color:#8A7A5A;margin-bottom:12px;">YouTube, SoundCloud, or Mixcloud</div>
+                    <div style="display:flex;gap:8px;">
+                        <input type="text" id="digestUrlInput" placeholder="https://youtube.com/watch?v=..." style="flex:1;padding:10px 14px;border-radius:10px;border:1px solid #333;background:#1a1a2e;color:#fff;font-family:'Nunito',sans-serif;font-size:0.85rem;" onkeydown="if(event.key==='Enter')digestUrl()">
+                        <button onclick="digestUrl()" style="padding:10px 20px;border-radius:10px;border:none;background:linear-gradient(135deg,#D4A017,#B8860B);color:#0D0D1A;font-weight:800;cursor:pointer;font-family:'Nunito',sans-serif;">Digest</button>
+                    </div>
+                    <div style="display:flex;gap:6px;justify-content:center;margin-top:10px;">
+                        <span style="font-size:0.6rem;background:rgba(255,0,0,0.15);color:#FF4444;padding:3px 8px;border-radius:6px;">YouTube</span>
+                        <span style="font-size:0.6rem;background:rgba(255,85,0,0.15);color:#FF5500;padding:3px 8px;border-radius:6px;">SoundCloud</span>
+                        <span style="font-size:0.6rem;background:rgba(124,58,237,0.15);color:#7C3AED;padding:3px 8px;border-radius:6px;">Mixcloud</span>
+                    </div>
+                </div>
             </div>
             <div id="digestorStatus" style="display:none;text-align:center;padding:16px;">
                 <div style="font-size:0.85rem;color:#D4A017;" id="digestorMsg">Processing...</div>
@@ -2492,6 +2542,7 @@ function buildDigestorExperience(name, modeName) {
                     <div id="digestorBar" style="width:0%;height:100%;background:linear-gradient(90deg,#D4A017,#FFE082);border-radius:2px;transition:width 0.5s ease;"></div>
                 </div>
             </div>
+            <div id="digestorMeta" style="display:none;"></div>
             <div id="digestorResults" style="display:none;"></div>
         </div>`;
 }
@@ -2503,12 +2554,14 @@ function uploadMix(input) {
     const dropZone = document.getElementById('dropZone');
     const status = document.getElementById('digestorStatus');
     const results = document.getElementById('digestorResults');
+    const meta = document.getElementById('digestorMeta');
     const msg = document.getElementById('digestorMsg');
     const bar = document.getElementById('digestorBar');
 
     dropZone.style.display = 'none';
     status.style.display = 'block';
     results.style.display = 'none';
+    if (meta) { meta.style.display = 'none'; meta.innerHTML = ''; }
     msg.textContent = `Uploading "${file.name}"...`;
     bar.style.width = '20%';
 
@@ -2527,44 +2580,186 @@ function uploadMix(input) {
             msg.style.color = '#C41E3A';
             return;
         }
-        if (!data.tracks || data.tracks.length === 0) {
-            msg.textContent = 'No tracks identified. Try a different mix with more well-known tracks.';
-            msg.style.color = '#C41E3A';
-            return;
-        }
-
         status.style.display = 'none';
-        results.style.display = 'block';
-        results.innerHTML = `
-            <div style="text-align:center;margin-bottom:16px;">
-                <span style="font-family:'Playfair Display',serif;font-size:1.2rem;color:#FFE082;">${data.unique_tracks} Tracks Identified</span>
-                <div style="font-size:0.65rem;color:#8A7A5A;margin-top:4px;">${data.raw_matches} fingerprint matches processed</div>
-            </div>
-            ${data.tracks.map(t => `
-                <div style="display:flex;align-items:center;gap:12px;padding:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;margin-bottom:8px;">
-                    ${t.album_art ? `<img src="${t.album_art}" style="width:48px;height:48px;border-radius:8px;">` : `<div style="width:48px;height:48px;border-radius:8px;background:rgba(212,160,23,0.1);display:flex;align-items:center;justify-content:center;">🎵</div>`}
-                    <div style="flex:1;min-width:0;">
-                        <div style="font-size:0.85rem;font-weight:700;color:#FFFEF7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.title}</div>
-                        <div style="font-size:0.7rem;color:#8A7A5A;">${t.artist}</div>
-                    </div>
-                    <div style="text-align:right;flex-shrink:0;">
-                        <div style="font-size:0.8rem;color:#D4A017;font-weight:700;">${t.timestamp}</div>
-                        <div style="display:flex;gap:6px;margin-top:4px;">
-                            ${t.spotify_url ? `<a href="${t.spotify_url}" target="_blank" style="font-size:0.6rem;color:#1DB954;text-decoration:none;">Spotify</a>` : ''}
-                            ${t.apple_music_url ? `<a href="${t.apple_music_url}" target="_blank" style="font-size:0.6rem;color:#FC3C44;text-decoration:none;">Apple</a>` : ''}
-                        </div>
-                    </div>
-                </div>
-            `).join('')}
-            <div style="text-align:center;margin-top:16px;">
-                <button class="nav-btn primary" onclick="location.reload()" style="font-size:0.8rem;padding:10px 24px;">Analyze Another Mix</button>
-            </div>`;
+        renderDigestResults(results, data, meta);
     })
     .catch(err => {
         bar.style.width = '100%';
         msg.textContent = 'Upload failed: ' + err.message;
         msg.style.color = '#C41E3A';
     });
+}
+
+/* --- Digest URL helpers --- */
+function formatDuration(seconds) {
+    if (!seconds) return '';
+    seconds = Math.round(seconds);
+    var h = Math.floor(seconds / 3600);
+    var m = Math.floor((seconds % 3600) / 60);
+    var s = seconds % 60;
+    if (h > 0) return h + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+    return m + ':' + String(s).padStart(2, '0');
+}
+
+function showDigestUrlPanel() {
+    var panel = document.getElementById('digestUrlPanel');
+    var card = document.getElementById('digestUrlCard');
+    if (panel.style.display === 'none') {
+        panel.style.display = 'block';
+        card.classList.add('connected');
+    } else {
+        panel.style.display = 'none';
+        card.classList.remove('connected');
+    }
+}
+
+function switchDigestTab(tab) {
+    var uploadPane = document.getElementById('digestUploadPane');
+    var urlPane = document.getElementById('digestUrlPane');
+    var uploadTab = document.getElementById('digestTabUpload');
+    var urlTab = document.getElementById('digestTabUrl');
+    if (tab === 'upload') {
+        uploadPane.style.display = 'block';
+        urlPane.style.display = 'none';
+        uploadTab.style.background = 'rgba(212,160,23,0.15)';
+        uploadTab.style.color = '#D4A017';
+        urlTab.style.background = 'transparent';
+        urlTab.style.color = '#666';
+    } else {
+        uploadPane.style.display = 'none';
+        urlPane.style.display = 'block';
+        urlTab.style.background = 'rgba(212,160,23,0.15)';
+        urlTab.style.color = '#D4A017';
+        uploadTab.style.background = 'transparent';
+        uploadTab.style.color = '#666';
+    }
+}
+
+function renderDigestResults(container, data, metaContainer) {
+    if (data.metadata && metaContainer) {
+        var meta = data.metadata;
+        var durStr = meta.duration ? formatDuration(meta.duration) : '';
+        metaContainer.style.display = 'block';
+        metaContainer.innerHTML =
+            '<div style="display:flex;gap:12px;align-items:center;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:12px;margin-bottom:12px;">' +
+            (meta.thumbnail ? '<img src="' + meta.thumbnail + '" style="width:80px;height:60px;border-radius:8px;object-fit:cover;">' : '') +
+            '<div style="flex:1;min-width:0;">' +
+                '<div style="font-size:0.85rem;font-weight:700;color:#FFFEF7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (meta.title || 'Unknown') + '</div>' +
+                '<div style="font-size:0.7rem;color:#8A7A5A;">' + (meta.uploader || '') + (durStr ? ' &bull; ' + durStr : '') + '</div>' +
+            '</div></div>';
+    }
+
+    if (!data.tracks || data.tracks.length === 0) {
+        container.style.display = 'block';
+        container.innerHTML = '<div style="text-align:center;padding:16px;color:#C41E3A;font-size:0.85rem;">No tracks identified. Try a mix with more well-known tracks.</div>';
+        return;
+    }
+
+    container.style.display = 'block';
+    container.innerHTML =
+        '<div style="text-align:center;margin-bottom:16px;">' +
+            '<span style="font-family:\'Playfair Display\',serif;font-size:1.2rem;color:#FFE082;">' + data.unique_tracks + ' Tracks Identified</span>' +
+            '<div style="font-size:0.65rem;color:#8A7A5A;margin-top:4px;">' + data.raw_matches + ' fingerprint matches processed</div>' +
+        '</div>' +
+        data.tracks.map(function(t) {
+            return '<div style="display:flex;align-items:center;gap:12px;padding:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;margin-bottom:8px;">' +
+                (t.album_art ? '<img src="' + t.album_art + '" style="width:48px;height:48px;border-radius:8px;">' : '<div style="width:48px;height:48px;border-radius:8px;background:rgba(212,160,23,0.1);display:flex;align-items:center;justify-content:center;">🎵</div>') +
+                '<div style="flex:1;min-width:0;">' +
+                    '<div style="font-size:0.85rem;font-weight:700;color:#FFFEF7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + t.title + '</div>' +
+                    '<div style="font-size:0.7rem;color:#8A7A5A;">' + t.artist + '</div>' +
+                '</div>' +
+                '<div style="text-align:right;flex-shrink:0;">' +
+                    '<div style="font-size:0.8rem;color:#D4A017;font-weight:700;">' + t.timestamp + '</div>' +
+                    '<div style="display:flex;gap:6px;margin-top:4px;">' +
+                        (t.spotify_url ? '<a href="' + t.spotify_url + '" target="_blank" style="font-size:0.6rem;color:#1DB954;text-decoration:none;">Spotify</a>' : '') +
+                        (t.apple_music_url ? '<a href="' + t.apple_music_url + '" target="_blank" style="font-size:0.6rem;color:#FC3C44;text-decoration:none;">Apple</a>' : '') +
+                    '</div>' +
+                '</div></div>';
+        }).join('') +
+        '<div style="text-align:center;margin-top:16px;">' +
+            '<button class="nav-btn primary" onclick="resetDigestor()" style="font-size:0.8rem;padding:10px 24px;">Analyze Another</button>' +
+        '</div>';
+}
+
+function resetDigestor() {
+    var dropZone = document.getElementById('dropZone');
+    if (dropZone) dropZone.style.display = '';
+    var status = document.getElementById('digestorStatus');
+    if (status) status.style.display = 'none';
+    var results = document.getElementById('digestorResults');
+    if (results) { results.style.display = 'none'; results.innerHTML = ''; }
+    var meta = document.getElementById('digestorMeta');
+    if (meta) { meta.style.display = 'none'; meta.innerHTML = ''; }
+    var mixFile = document.getElementById('mixFile');
+    if (mixFile) mixFile.value = '';
+}
+
+function _digestUrlCommon(urlInputId, statusId, metaId, resultsId, onSuccess) {
+    var url = document.getElementById(urlInputId).value.trim();
+    if (!url) return;
+
+    var status = document.getElementById(statusId);
+    var meta = document.getElementById(metaId);
+    var results = document.getElementById(resultsId);
+
+    status.style.display = 'block';
+    status.innerHTML = '<div style="font-size:0.85rem;color:#D4A017;">Extracting audio from URL...</div>' +
+        '<div style="width:100%;height:4px;background:rgba(255,255,255,0.06);border-radius:2px;margin-top:12px;overflow:hidden;">' +
+        '<div id="' + statusId + 'Bar" style="width:15%;height:100%;background:linear-gradient(90deg,#D4A017,#FFE082);border-radius:2px;transition:width 0.5s ease;"></div></div>';
+    if (meta) { meta.style.display = 'none'; meta.innerHTML = ''; }
+    if (results) { results.style.display = 'none'; results.innerHTML = ''; }
+
+    var bar = document.getElementById(statusId + 'Bar');
+    setTimeout(function(){ if(bar) bar.style.width = '30%'; status.querySelector('div').textContent = 'Sending to AudD Enterprise...'; }, 3000);
+    setTimeout(function(){ if(bar) bar.style.width = '50%'; status.querySelector('div').textContent = 'Fingerprinting audio segments...'; }, 10000);
+    setTimeout(function(){ if(bar) bar.style.width = '70%'; status.querySelector('div').textContent = 'Still scanning... large mixes take a few minutes'; }, 30000);
+    setTimeout(function(){ if(bar) bar.style.width = '85%'; }, 60000);
+
+    fetch('/api/digest/url', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({url: url})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+        if(bar) bar.style.width = '100%';
+        if (data.error && (!data.tracks || data.tracks.length === 0)) {
+            status.innerHTML = '<div style="font-size:0.85rem;color:#C41E3A;">Error: ' + data.error + '</div>';
+            // Still show metadata if available
+            if (data.metadata && meta) {
+                var m = data.metadata;
+                var dur = m.duration ? formatDuration(m.duration) : '';
+                meta.style.display = 'block';
+                meta.innerHTML = '<div style="display:flex;gap:12px;align-items:center;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:12px;margin-top:8px;">' +
+                    (m.thumbnail ? '<img src="' + m.thumbnail + '" style="width:80px;height:60px;border-radius:8px;object-fit:cover;">' : '') +
+                    '<div style="flex:1;"><div style="font-size:0.85rem;color:#fff;">' + (m.title || '') + '</div><div style="font-size:0.7rem;color:#8A7A5A;">' + (m.uploader || '') + (dur ? ' &bull; ' + dur : '') + '</div></div></div>';
+            }
+            return;
+        }
+        status.style.display = 'none';
+        renderDigestResults(results, data, meta);
+        if (onSuccess) onSuccess(data);
+    })
+    .catch(function(err){
+        if(bar) bar.style.width = '100%';
+        status.innerHTML = '<div style="font-size:0.85rem;color:#C41E3A;">Failed: ' + err.message + '</div>';
+    });
+}
+
+function digestUrlStep1() {
+    _digestUrlCommon('step1UrlInput', 'step1UrlStatus', 'step1UrlMeta', 'step1UrlResults', function(data) {
+        var tracks = data.tracks || [];
+        if (tracks.length > 0) {
+            mixUploadedTracks = tracks.map(function(t){ return { name: t.title, artist: t.artist }; });
+            enableStep1Continue();
+        }
+    });
+}
+
+function digestUrl() {
+    var dropZone = document.getElementById('dropZone');
+    if (dropZone) dropZone.style.display = 'none';
+    _digestUrlCommon('digestUrlInput', 'digestorStatus', 'digestorMeta', 'digestorResults', null);
 }
 
 /* --- Events Radar --- */

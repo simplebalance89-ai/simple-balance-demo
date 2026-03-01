@@ -6,3 +6,4 @@ requests
 httpx
 openai
 replicate
+yt-dlp

@@ -2,6 +2,8 @@ import os
 import time
 import json
 import secrets
+import logging
+import subprocess
 import httpx
 import replicate
 from urllib.parse import urlencode
@@ -10,6 +12,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from openai import AzureOpenAI
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Simple Balance Music")
 
@@ -36,6 +40,118 @@ def get_ai_client():
     return AzureOpenAI(azure_endpoint=endpoint, api_key=key, api_version="2024-12-01-preview")
 
 
+# ── JAW System Prompt (2026 Unified Build) ────────────────────────────────────
+
+JAW_SYSTEM_PROMPT = """You are J.A.W. (Just Add Wax) — the personal DJ intelligence and melodic techno discovery engine for Simple Balance Music.
+
+## CORE IDENTITY
+- Role: Track digging advisor, set builder, harmonic mixing guide, energy flow guardian
+- Workflow: Serato DJ Pro (2-channel) + Tidal streaming
+- Sound era focus: 2023–2026 Cinematic / Hybrid Melodic Techno
+- Tone: Knowledgeable, direct, music-obsessed. You talk like a DJ who lives in the booth.
+
+## SOUND ARCHITECTURE (2026 Tier System)
+
+### Tier 1 — Core Modern Sound (2025–2026) 🔥
+Artists: Son of Son, Aladag, HNTR, Fezzo, Ivory (IT), Oppaacha
+Labels: Running Clouds, Oddity Records, Siona Records, Radikon, Eklektisch, Atlant, Monaberry, Frau Blau, Frequenza Black, Scenarios
+Profile: Cinematic tension, midrange drive, club-ready 4–6 min edits, emotional breakdowns, 122–126 BPM, peak-driving energy
+
+### Tier 2 — Transitional Bridge (2023–2024) 🌗
+Artists: Rafael Cerato, Dyzen, 8Kays, Argy, Fideles, Township Rebellion, Solee
+Labels: Oddity, Radikon, Atlant, Parquet
+Use: Blending Afterlife-era melodic with modern hybrid techno, journey-building sets, 121–125 BPM
+
+### Tier 3 — Legacy Era (2019–2023 Afterlife Wave) 🌊
+Artists: Massano, Colyn, Anyma, Innellea, Adriatique, Mind Against, Tale Of Us, Kevin de Vries
+Labels: Afterlife, Innervisions, Einmusika, Diynamic, Anjunadeep, Stil Vor Talent
+Use: Emotional nostalgia moments, closing or sunrise sets, 120–125 BPM
+
+## HARMONIC MIXING (Camelot System)
+- Same key = perfect match
+- ±1 on Camelot wheel = harmonic transition
+- Relative major/minor (e.g., 8A ↔ 8B) = smooth mood shift
+- +7 on Camelot wheel = energy lift
+Always provide both Camelot code AND open key notation (e.g., "8A / Am").
+
+## ENERGY CURVE (Set Structure)
+- 118–121 BPM → Hypnotic / Warm-up
+- 122–125 BPM → Driving / Build
+- 125–128 BPM → Emotional peak / Main room
+Arc: Warm → Fezzo/Ivory, Drive → Aladag/HNTR, Peak → Son of Son/Oppaacha
+Dominant key range: 1A–8A on Camelot wheel.
+
+## CRATE ORGANIZATION
+Energy crates: Warm-Up | Build | Peak | Closing
+Key crates: 1A–3A | 4A–6A | 7A–9A | 10A–12A
+Label crates: Afterlife | Innervisions | Running Clouds | Oddity | Siona
+
+## TRACK RECOMMENDATION FORMAT
+When recommending tracks, ALWAYS include:
+- Artist — Title
+- Label
+- BPM
+- Camelot code + Open Key (e.g., "8A / Am")
+- Energy level (1-10)
+- Tier (1/2/3)
+- Why it fits the context
+
+## AVOID RECOMMENDING
+- Industrial techno, big room EDM, minimal-only tracks
+- 8+ min marathon cuts (unless specifically requested)
+- Anything outside the melodic/progressive/deep house spectrum
+
+## DJ WATCHLIST (Priority Names)
+Weekly scan artists: Vintage Culture, Solomun, Adriatique, Magdalena, Kevin de Vries, Miss Monique
+If a track appears in 2+ DJ charts → Watchlist. 3+ sources → Rising Priority.
+
+Be concise, practical, and music-first. Every recommendation should be mixable and club-tested."""
+
+
+# ── URL Audio Extraction ──────────────────────────────────────────────────────
+
+def extract_audio_url(url: str) -> dict:
+    """Use yt-dlp to extract a direct audio stream URL from YouTube/SoundCloud/Mixcloud.
+    Returns dict with audio_url, title, uploader, duration, thumbnail or error."""
+    try:
+        result = subprocess.run(
+            [
+                "yt-dlp",
+                "--no-download",
+                "--print-json",
+                "-f", "bestaudio[ext=m4a]/bestaudio/best",
+                "--no-playlist",
+                "--no-warnings",
+                url,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            stderr = result.stderr.strip()
+            if "Sign in" in stderr or "age" in stderr.lower():
+                return {"error": "Age-restricted content. Try a different link."}
+            return {"error": f"yt-dlp failed: {stderr[:200]}"}
+
+        info = json.loads(result.stdout)
+        return {
+            "audio_url": info.get("url"),
+            "title": info.get("title", "Unknown"),
+            "uploader": info.get("uploader", info.get("channel", "Unknown")),
+            "duration": info.get("duration", 0),
+            "thumbnail": info.get("thumbnail"),
+        }
+    except subprocess.TimeoutExpired:
+        return {"error": "URL extraction timed out (30s). Try a shorter video."}
+    except json.JSONDecodeError:
+        return {"error": "Failed to parse video metadata."}
+    except FileNotFoundError:
+        return {"error": "yt-dlp not installed on server."}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @app.post("/api/chat")
 async def chat(payload: dict):
     """AI chat endpoint for JAW DJ Command and other modes."""
@@ -44,7 +160,7 @@ async def chat(payload: dict):
         return JSONResponse({"error": "Azure OpenAI not configured"}, status_code=503)
 
     model = get_secret("AZURE_OPENAI_MODEL", "gpt-4o")
-    system_prompt = payload.get("system", "You are J.A.W., an AI DJ advisor and energy flow guardian for Simple Balance Music. You help DJs build sets, find harmonic matches, analyze energy flow, and master their craft. Be knowledgeable, direct, and music-obsessed.")
+    system_prompt = payload.get("system", JAW_SYSTEM_PROMPT)
     messages = payload.get("messages", [])
 
     api_messages = [{"role": "system", "content": system_prompt}]
@@ -178,6 +294,86 @@ async def digestor(file: UploadFile = File(...)):
         return JSONResponse({"error": "Request timed out. Mix may be too large.", "tracks": []}, status_code=200)
     except Exception as e:
         return JSONResponse({"error": str(e), "tracks": []}, status_code=500)
+
+
+# ── URL Digest (YouTube / SoundCloud / Mixcloud) ─────────────────────────────
+
+@app.post("/api/digest/url")
+async def digest_url(payload: dict):
+    """Extract tracklist from a URL (YouTube, SoundCloud, Mixcloud) via yt-dlp + AudD."""
+    url = (payload.get("url") or "").strip()
+    if not url:
+        return JSONResponse({"error": "No URL provided"}, status_code=400)
+
+    token = get_secret("AUDD_API_TOKEN")
+    if not token:
+        return JSONResponse({"error": "AudD API token not configured"}, status_code=503)
+
+    # Step 1: Extract audio stream URL + metadata via yt-dlp
+    logger.info("Extracting audio URL from: %s", url)
+    info = extract_audio_url(url)
+    if "error" in info:
+        return JSONResponse({
+            "error": info["error"],
+            "tracks": [],
+        }, status_code=200)
+
+    audio_url = info.get("audio_url")
+    if not audio_url:
+        return JSONResponse({
+            "error": "Could not extract audio stream URL.",
+            "tracks": [],
+        }, status_code=200)
+
+    metadata = {
+        "title": info.get("title", "Unknown"),
+        "uploader": info.get("uploader", "Unknown"),
+        "duration": info.get("duration", 0),
+        "thumbnail": info.get("thumbnail"),
+    }
+
+    # Step 2: Send stream URL to AudD Enterprise API (AudD downloads it server-side)
+    logger.info("Sending stream URL to AudD for: %s", metadata["title"])
+    data = {
+        "api_token": token,
+        "url": audio_url,
+        "accurate_offsets": "true",
+        "return": "spotify,apple_music,deezer",
+        "skip": "2",
+        "every": "5",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=600) as client:
+            response = await client.post(AUDD_API_URL, data=data)
+            response.raise_for_status()
+            result = response.json()
+
+        if "result" not in result:
+            error_msg = result.get("error", {}).get("error_message", "Unknown error from AudD")
+            return JSONResponse({
+                "error": error_msg,
+                "tracks": [],
+                "metadata": metadata,
+            }, status_code=200)
+
+        parsed = parse_enterprise_result(result["result"])
+        parsed["metadata"] = metadata
+        return parsed
+
+    except httpx.TimeoutException:
+        return JSONResponse({
+            "error": "AudD processing timed out. The mix may be too long.",
+            "tracks": [],
+            "metadata": metadata,
+        }, status_code=200)
+    except Exception as e:
+        logger.error("URL digest failed: %s", e)
+        return JSONResponse({
+            "error": str(e),
+            "tracks": [],
+            "metadata": metadata,
+        }, status_code=500)
 
 
 # ── AI Mastering Analysis ─────────────────────────────────────────────────────
@@ -899,10 +1095,14 @@ async def ai_recommendations(genre: str = "", mood: str = "", artist: str = "",
     context = ", ".join(context_parts)
 
     system_prompt = (
-        "You are a music recommendation engine for Simple Balance Music, a DJ/producer platform. "
+        "You are J.A.W., the recommendation engine for Simple Balance Music. "
+        "Sound focus: 2023–2026 cinematic / hybrid melodic techno. "
+        "Tier 1 (priority): Son of Son, Aladag, HNTR, Fezzo, Ivory, Oppaacha — labels: Running Clouds, Oddity, Siona, Radikon, Eklektisch. "
+        "Tier 2: Rafael Cerato, Dyzen, 8Kays, Argy, Fideles. Tier 3 (legacy): Massano, Colyn, Anyma, Innellea, Adriatique. "
         f"Given preferences, recommend exactly {limit} specific, real tracks. "
-        "Return ONLY valid JSON: {\"tracks\": [{\"title\": \"...\", \"artist\": \"...\", \"bpm\": number, \"key\": \"...\", \"reason\": \"...\"}]}. "
-        "Focus on electronic, house, techno, and adjacent genres. Use real, existing tracks only."
+        "Return ONLY valid JSON: {\"tracks\": [{\"title\": \"...\", \"artist\": \"...\", \"bpm\": number, "
+        "\"key\": \"...\", \"camelot\": \"...\", \"tier\": 1|2|3, \"energy\": 1-10, \"label\": \"...\", \"reason\": \"...\"}]}. "
+        "Always include Camelot code + open key. Prioritize Tier 1 artists/labels. Use real, existing tracks only."
     )
 
     try:
