@@ -1375,25 +1375,130 @@ function updateModeCards() {
 
 /* ===== SPOTIFY ===== */
 let spotifyConnected = false;
-const JAW_SPOTIFY = '1228993875';
-const PETER_SPOTIFY = '31j6zvkbdfpegk3qxzyikrlyz57y';
+let spotifySession = localStorage.getItem('spotify_session') || '';
+let spotifyUserInfo = null;
+
+// On page load — check for OAuth callback or saved session
+(function checkSpotifySession() {
+    const params = new URLSearchParams(window.location.search);
+    const sessionFromUrl = params.get('spotify_session');
+    if (sessionFromUrl) {
+        spotifySession = sessionFromUrl;
+        localStorage.setItem('spotify_session', sessionFromUrl);
+        window.history.replaceState({}, '', window.location.pathname);
+    }
+    if (spotifySession) {
+        loadSpotifyUser(spotifySession);
+    }
+
+    // Listen for popup OAuth callback
+    window.addEventListener('message', function(e) {
+        if (e.data && e.data.spotify_session) {
+            spotifySession = e.data.spotify_session;
+            localStorage.setItem('spotify_session', e.data.spotify_session);
+            loadSpotifyUser(e.data.spotify_session);
+        }
+        if (e.data && e.data.spotify_error) {
+            console.warn('Spotify OAuth error:', e.data.spotify_error);
+            // Fall back to client credentials mode
+            connectSpotifyClientCreds();
+        }
+    });
+})();
+
+async function loadSpotifyUser(session) {
+    try {
+        const res = await fetch(`/api/spotify/me?session=${session}`);
+        if (!res.ok) throw new Error('Session expired');
+        const data = await res.json();
+        spotifyUserInfo = data.user;
+        spotifyConnected = true;
+        const card = document.getElementById('spotifyCard');
+        if (!card) return;
+        card.classList.add('connected');
+        card.style.opacity = '1';
+        card.onclick = null;
+        // Show user avatar + name on card
+        const avatar = data.user.image ? `<img src="${data.user.image}" style="width:18px;height:18px;border-radius:50%;vertical-align:middle;margin-right:4px;">` : '';
+        card.querySelector('.cc-status').innerHTML = `${avatar}<span style="color:#1DB954;">${data.user.name}</span>`;
+        // Show library panel
+        document.getElementById('spotifyLibrary').style.display = 'block';
+        document.getElementById('spotifyUserLabel').textContent = data.user.name;
+        // Load user playlists
+        loadUserPlaylists(session);
+        enableStep1Continue();
+    } catch (e) {
+        localStorage.removeItem('spotify_session');
+        spotifySession = '';
+    }
+}
+
+async function loadUserPlaylists(session) {
+    try {
+        const res = await fetch(`/api/spotify/user/playlists?session=${session}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const container = document.getElementById('spotifyPlaylists');
+        if (!container || !data.playlists || !data.playlists.length) return;
+        container.innerHTML = '';
+        const section = document.createElement('div');
+        section.innerHTML = '<div style="font-size:0.7rem;color:#1DB954;margin:8px 0 4px;text-transform:uppercase;letter-spacing:1px;">Your Playlists</div>';
+        data.playlists.slice(0, 8).forEach(p => {
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;transition:background 0.2s;';
+            row.onmouseenter = () => row.style.background = 'rgba(29,185,84,0.15)';
+            row.onmouseleave = () => row.style.background = 'transparent';
+            row.onclick = () => loadPlaylistTracks(p.id, p.name);
+            const img = p.image ? `<img src="${p.image}" style="width:32px;height:32px;border-radius:4px;">` : '<div style="width:32px;height:32px;border-radius:4px;background:#333;display:flex;align-items:center;justify-content:center;font-size:0.7rem;">🎵</div>';
+            row.innerHTML = `${img}<div style="flex:1;min-width:0;"><div style="font-size:0.8rem;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.name}</div><div style="font-size:0.65rem;color:#666;">${p.tracks || 0} tracks · ${p.owner}</div></div>`;
+            section.appendChild(row);
+        });
+        container.appendChild(section);
+    } catch (e) { /* silent */ }
+}
 
 async function connectSpotify() {
     const card = document.getElementById('spotifyCard');
-    const status = document.getElementById('spotifyStatus');
+    if (!card) return;
+    // If already have a session, just reload user
+    if (spotifySession) {
+        await loadSpotifyUser(spotifySession);
+        return;
+    }
+    // Try OAuth login via popup
+    try {
+        const popup = window.open('/api/spotify/login', 'spotify-login', 'width=500,height=700,scrollbars=yes');
+        if (!popup) throw new Error('Popup blocked');
+        card.style.opacity = '0.6';
+        card.querySelector('.cc-status').textContent = 'Logging in...';
+        card.querySelector('.cc-status').style.color = '#D4A017';
+        // Popup will send postMessage on success — handled by event listener above
+        // Set a timeout to fall back if popup is closed without completing
+        const checkPopup = setInterval(() => {
+            if (popup.closed && !spotifyConnected) {
+                clearInterval(checkPopup);
+                connectSpotifyClientCreds();
+            }
+        }, 1000);
+    } catch (e) {
+        // Popup blocked — fall back to client credentials
+        connectSpotifyClientCreds();
+    }
+}
+
+async function connectSpotifyClientCreds() {
+    const card = document.getElementById('spotifyCard');
     if (!card) return;
     card.style.opacity = '0.6';
-    card.onclick = null;
     try {
-        // Test connectivity with a simple search (client credentials can't access user playlists)
         const res = await fetch('/api/spotify/search?q=test&limit=1');
         if (!res.ok) throw new Error('Spotify not configured');
         const data = await res.json();
-        if (!data.tracks || !data.tracks.items) throw new Error('Spotify search failed');
+        if (!data.tracks || !data.tracks.length) throw new Error('Spotify search failed');
         spotifyConnected = true;
         card.classList.add('connected');
         card.style.opacity = '1';
-        card.querySelector('.cc-status').textContent = 'Connected';
+        card.querySelector('.cc-status').textContent = 'Connected (search only)';
         card.querySelector('.cc-status').style.color = '#1DB954';
         document.getElementById('spotifyLibrary').style.display = 'block';
         document.getElementById('spotifyUserLabel').textContent = 'Search Spotify catalog';
@@ -1403,14 +1508,9 @@ async function connectSpotify() {
         card.onclick = function(){ connectSpotify(); };
         card.querySelector('.cc-status').textContent = 'Connection failed — retry';
         card.querySelector('.cc-status').style.color = '#C41E3A';
-        if (status) {
-            status.style.display = 'block';
-            status.innerHTML = '<span style="font-size:0.75rem;color:#C41E3A;">Spotify keys not configured on server.</span>';
-        }
         setTimeout(() => {
             card.querySelector('.cc-status').textContent = 'Ready to connect';
             card.querySelector('.cc-status').style.color = '#22c55e';
-            if (status) status.style.display = 'none';
         }, 3000);
     }
 }
@@ -1476,7 +1576,8 @@ async function spotifySearch() {
     const results = document.getElementById('spotifyResults');
     results.innerHTML = '<div style="text-align:center;padding:12px;color:#888;font-size:0.8rem;">Searching...</div>';
     try {
-        const res = await fetch(`/api/spotify/search?q=${encodeURIComponent(query)}&type=track&limit=10`);
+        const sessionParam = spotifySession ? `&session=${spotifySession}` : '';
+        const res = await fetch(`/api/spotify/search?q=${encodeURIComponent(query)}&type=track&limit=10${sessionParam}`);
         const data = await res.json();
         const tracks = data.tracks || [];
         results.innerHTML = `<div style="font-size:0.7rem;color:#1DB954;margin:4px 0 8px;text-transform:uppercase;letter-spacing:1px;">Results for "${query}"</div>`;

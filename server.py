@@ -1,11 +1,13 @@
 import os
 import time
 import json
+import secrets
 import httpx
 import replicate
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from urllib.parse import urlencode
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from openai import AzureOpenAI
 
@@ -610,9 +612,12 @@ async def get_spotify_token():
 
 
 @app.get("/api/spotify/search")
-async def spotify_search(q: str, type: str = "track", limit: int = 10):
+async def spotify_search(q: str, type: str = "track", limit: int = 10, session: str = ""):
     """Search Spotify for tracks, artists, or albums."""
-    token = await get_spotify_token()
+    # Prefer user token if logged in, else fall back to client credentials
+    token = _spotify_user_sessions.get(session, {}).get("access_token") if session else None
+    if not token:
+        token = await get_spotify_token()
     if not token:
         return JSONResponse({"error": "Spotify not configured"}, status_code=503)
 
@@ -623,7 +628,147 @@ async def spotify_search(q: str, type: str = "track", limit: int = 10):
             params={"q": q, "type": type, "limit": limit},
         )
         resp.raise_for_status()
-        return resp.json()
+        data = resp.json()
+
+    # Normalize response — frontend expects {tracks: [{name, artist, album, album_image, ...}]}
+    tracks = []
+    for item in data.get("tracks", {}).get("items", []):
+        artists = ", ".join(a.get("name", "") for a in item.get("artists", []))
+        images = item.get("album", {}).get("images", [])
+        tracks.append({
+            "name": item.get("name", ""),
+            "artist": artists,
+            "album": item.get("album", {}).get("name", ""),
+            "album_image": images[0]["url"] if images else None,
+            "preview_url": item.get("preview_url"),
+            "spotify_url": item.get("external_urls", {}).get("spotify"),
+            "id": item.get("id"),
+        })
+
+    return {"tracks": tracks}
+
+
+# ── Spotify OAuth (User Login) ────────────────────────────────────────────
+
+_spotify_user_sessions = {}  # {session_id: {access_token, refresh_token, user}}
+
+SPOTIFY_REDIRECT_URI = os.environ.get(
+    "SPOTIFY_REDIRECT_URI", "https://simple-balance-demo.onrender.com/api/spotify/callback"
+)
+
+
+@app.get("/api/spotify/login")
+async def spotify_login():
+    """Redirect to Spotify authorization page."""
+    client_id = get_secret("SPOTIFY_CLIENT_ID")
+    if not client_id:
+        return JSONResponse({"error": "Spotify not configured"}, status_code=503)
+    scope = "user-read-private user-read-email playlist-read-private"
+    state = secrets.token_urlsafe(16)
+    params = urlencode({
+        "client_id": client_id,
+        "response_type": "code",
+        "redirect_uri": SPOTIFY_REDIRECT_URI,
+        "scope": scope,
+        "state": state,
+    })
+    return RedirectResponse(f"https://accounts.spotify.com/authorize?{params}")
+
+
+@app.get("/api/spotify/callback")
+async def spotify_callback(code: str = "", error: str = ""):
+    """Handle Spotify OAuth callback — exchange code for tokens, get user profile."""
+    if error or not code:
+        return HTMLResponse(
+            "<html><body><script>if(window.opener){window.opener.postMessage({spotify_error:'"
+            + (error or "no_code") + "'},'*');window.close()}else{window.location.href='/'}</script></body></html>"
+        )
+
+    client_id = get_secret("SPOTIFY_CLIENT_ID")
+    client_secret = get_secret("SPOTIFY_CLIENT_SECRET")
+    auth = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+
+    try:
+        async with httpx.AsyncClient() as http:
+            # Exchange code for tokens
+            resp = await http.post(
+                "https://accounts.spotify.com/api/token",
+                headers={"Authorization": f"Basic {auth}", "Content-Type": "application/x-www-form-urlencoded"},
+                data={"grant_type": "authorization_code", "code": code, "redirect_uri": SPOTIFY_REDIRECT_URI},
+            )
+            resp.raise_for_status()
+            tokens = resp.json()
+
+            # Get user profile
+            me_resp = await http.get(
+                "https://api.spotify.com/v1/me",
+                headers={"Authorization": f"Bearer {tokens['access_token']}"},
+            )
+            user = me_resp.json() if me_resp.status_code == 200 else {}
+    except Exception as e:
+        return HTMLResponse(
+            f"<html><body><script>if(window.opener){{window.opener.postMessage({{spotify_error:'auth_failed'}},'*');window.close()}}else{{window.location.href='/'}}</script></body></html>"
+        )
+
+    session_id = secrets.token_urlsafe(32)
+    _spotify_user_sessions[session_id] = {
+        "access_token": tokens["access_token"],
+        "refresh_token": tokens.get("refresh_token"),
+        "user": {
+            "id": user.get("id", ""),
+            "name": user.get("display_name", "Spotify User"),
+            "email": user.get("email", ""),
+            "image": (user.get("images") or [{}])[0].get("url") if user.get("images") else None,
+            "product": user.get("product", "free"),
+        },
+    }
+
+    # Return HTML that sends session to parent window (popup flow) or redirects (full-page flow)
+    return HTMLResponse(
+        f"""<!DOCTYPE html><html><body><script>
+if (window.opener) {{
+    window.opener.postMessage({{spotify_session: '{session_id}'}}, '*');
+    window.close();
+}} else {{
+    window.location.href = '/?spotify_session={session_id}';
+}}
+</script><p>Connecting to Spotify...</p></body></html>"""
+    )
+
+
+@app.get("/api/spotify/me")
+async def spotify_me(session: str = ""):
+    """Get current Spotify user profile."""
+    if session not in _spotify_user_sessions:
+        return JSONResponse({"error": "Not logged in", "logged_in": False}, status_code=401)
+    return {"logged_in": True, "user": _spotify_user_sessions[session]["user"]}
+
+
+@app.get("/api/spotify/user/playlists")
+async def spotify_user_playlists(session: str = ""):
+    """Get the logged-in user's Spotify playlists."""
+    if session not in _spotify_user_sessions:
+        return JSONResponse({"error": "Not logged in"}, status_code=401)
+    token = _spotify_user_sessions[session]["access_token"]
+    async with httpx.AsyncClient() as http:
+        resp = await http.get(
+            "https://api.spotify.com/v1/me/playlists?limit=20",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        if resp.status_code != 200:
+            return JSONResponse({"error": "Failed to fetch playlists"}, status_code=resp.status_code)
+        data = resp.json()
+
+    playlists = []
+    for p in data.get("items", []):
+        playlists.append({
+            "id": p["id"],
+            "name": p["name"],
+            "tracks": p.get("tracks", {}).get("total", 0),
+            "image": (p.get("images") or [{}])[0].get("url") if p.get("images") else None,
+            "owner": p.get("owner", {}).get("display_name", ""),
+        })
+    return {"playlists": playlists}
 
 
 @app.get("/api/spotify/recommendations")
@@ -652,14 +797,15 @@ async def get_tidal_token():
         return None
 
     try:
+        auth = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
         async with httpx.AsyncClient() as client:
             resp = await client.post(
                 "https://auth.tidal.com/v1/oauth2/token",
-                data={
-                    "grant_type": "client_credentials",
-                    "client_id": client_id,
-                    "client_secret": client_secret,
+                headers={
+                    "Authorization": f"Basic {auth}",
+                    "Content-Type": "application/x-www-form-urlencoded",
                 },
+                data={"grant_type": "client_credentials"},
             )
             resp.raise_for_status()
             data = resp.json()
