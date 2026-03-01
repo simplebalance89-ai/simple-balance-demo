@@ -327,9 +327,9 @@ async def _try_youtube_description(url: str) -> dict | None:
 
     try:
         async with httpx.AsyncClient(timeout=15) as client:
-            # Use YouTube's internal player API with ANDROID client — bypasses cloud IP blocking
+            # Use YouTube's internal player API with ANDROID client + public innertube key
             api_resp = await client.post(
-                "https://www.youtube.com/youtubei/v1/player",
+                "https://www.youtube.com/youtubei/v1/player?key=AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w",
                 json={
                     "videoId": video_id,
                     "context": {"client": {"clientName": "ANDROID", "clientVersion": "19.09.37", "androidSdkVersion": 30}},
@@ -1671,7 +1671,7 @@ async def debug_youtube(video_id: str):
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.post(
-                "https://www.youtube.com/youtubei/v1/player",
+                "https://www.youtube.com/youtubei/v1/player?key=AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w",
                 json={"videoId": video_id, "context": {"client": {"clientName": "ANDROID", "clientVersion": "19.09.37", "androidSdkVersion": 30}}},
                 headers={"Content-Type": "application/json"},
             )
