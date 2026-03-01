@@ -131,9 +131,11 @@ def extract_audio_url(url: str) -> dict:
         )
         if result.returncode != 0:
             stderr = result.stderr.strip()
-            if "Sign in" in stderr or "age" in stderr.lower():
+            lower = stderr.lower()
+            if "sign in to confirm your age" in lower or "age-restricted" in lower or "age-gated" in lower:
                 return {"error": "Age-restricted content. Try a different link."}
-            return {"error": f"yt-dlp failed: {stderr[:200]}"}
+            logger.error("yt-dlp failed for %s: %s", url, stderr[:500])
+            return {"error": f"yt-dlp failed: {stderr[:300]}"}
 
         info = json.loads(result.stdout)
         return {
