@@ -974,6 +974,8 @@
     <span>AI Production Suite Demo</span>
     <span class="banner-sep">|</span>
     <span>Click-through Experience</span>
+    <span class="banner-sep">|</span>
+    <span onclick="clearAllCache()" style="cursor:pointer;color:#FF4D6A;font-weight:700;">Clear Cache</span>
 </div>
 
 <!-- PROGRESS BAR -->
@@ -2848,6 +2850,20 @@ function loadDashboardStats() {
             if (el) el.textContent = '?';
         });
     });
+}
+
+// ===== CLEAR CACHE =====
+async function clearAllCache() {
+    if ('serviceWorker' in navigator) {
+        var regs = await navigator.serviceWorker.getRegistrations();
+        for (var r of regs) await r.unregister();
+    }
+    if ('caches' in window) {
+        var names = await caches.keys();
+        for (var n of names) await caches.delete(n);
+    }
+    localStorage.clear();
+    window.location.href = window.location.pathname + '?v=' + Date.now();
 }
 </script>
 </body>
