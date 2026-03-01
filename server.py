@@ -309,23 +309,18 @@ _digest_jobs = {}  # {job_id: {status, metadata, result, error, started_at}}
 
 
 async def _run_digest_job(job_id: str, url: str):
-    """Background coroutine: yt-dlp extract → AudD scan → store results."""
+    """Background coroutine: yt-dlp extract metadata → download audio → AudD file upload → parse."""
     job = _digest_jobs[job_id]
     token = get_secret("AUDD_API_TOKEN")
+    tmp_path = None
 
     try:
-        # Step 1: Extract audio stream URL + metadata via yt-dlp
+        # Step 1: Extract metadata via yt-dlp (quick, no download)
         job["status"] = "extracting"
         info = extract_audio_url(url)
         if "error" in info:
             job["status"] = "failed"
             job["error"] = info["error"]
-            return
-
-        audio_url = info.get("audio_url")
-        if not audio_url:
-            job["status"] = "failed"
-            job["error"] = "Could not extract audio stream URL."
             return
 
         job["metadata"] = {
@@ -335,20 +330,64 @@ async def _run_digest_job(job_id: str, url: str):
             "thumbnail": info.get("thumbnail"),
         }
 
-        # Step 2: Send stream URL to AudD Enterprise API
+        # Step 2: Download audio to temp file via yt-dlp
+        job["status"] = "downloading"
+        logger.info("Downloading audio: %s", job["metadata"]["title"])
+        tmp_dir = "/tmp"
+        tmp_template = os.path.join(tmp_dir, f"digest_{job_id}.%(ext)s")
+
+        dl_result = subprocess.run(
+            [
+                "yt-dlp",
+                "-f", "bestaudio/best",
+                "--no-playlist",
+                "--no-warnings",
+                "--extractor-args", "youtube:player_client=android",
+                "--geo-bypass",
+                "-o", tmp_template,
+                url,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=300,  # 5 min download timeout
+        )
+
+        if dl_result.returncode != 0:
+            job["status"] = "failed"
+            job["error"] = f"Download failed: {dl_result.stderr.strip()[:300]}"
+            return
+
+        # Find the downloaded file
+        import glob as glob_mod
+        matches = glob_mod.glob(os.path.join(tmp_dir, f"digest_{job_id}.*"))
+        if not matches:
+            job["status"] = "failed"
+            job["error"] = "Download completed but no file found."
+            return
+        tmp_path = matches[0]
+        file_size = os.path.getsize(tmp_path)
+        logger.info("Downloaded %s (%.1f MB)", tmp_path, file_size / 1024 / 1024)
+
+        # Step 3: Upload file to AudD Enterprise API
         job["status"] = "scanning"
         logger.info("AudD scanning: %s", job["metadata"]["title"])
         data = {
             "api_token": token,
-            "url": audio_url,
             "accurate_offsets": "true",
             "return": "spotify,apple_music,deezer",
             "skip": "2",
             "every": "5",
         }
 
+        with open(tmp_path, "rb") as f:
+            file_data = f.read()
+
         async with httpx.AsyncClient(timeout=900) as client:
-            response = await client.post(AUDD_API_URL, data=data)
+            response = await client.post(
+                AUDD_API_URL,
+                data=data,
+                files={"file": (os.path.basename(tmp_path), file_data, "audio/mpeg")},
+            )
             response.raise_for_status()
             result = response.json()
 
@@ -358,7 +397,7 @@ async def _run_digest_job(job_id: str, url: str):
             job["error"] = error_msg
             return
 
-        # Step 3: Parse results
+        # Step 4: Parse results
         job["status"] = "parsing"
         parsed = parse_enterprise_result(result["result"])
         parsed["metadata"] = job["metadata"]
@@ -366,6 +405,9 @@ async def _run_digest_job(job_id: str, url: str):
         job["status"] = "done"
         logger.info("Digest complete: %s — %d tracks found", job["metadata"]["title"], len(parsed.get("tracks", [])))
 
+    except subprocess.TimeoutExpired:
+        job["status"] = "failed"
+        job["error"] = "Audio download timed out (5 min). Try a shorter mix."
     except httpx.TimeoutException:
         job["status"] = "failed"
         job["error"] = "AudD processing timed out (15 min). The mix may be too long."
@@ -373,6 +415,13 @@ async def _run_digest_job(job_id: str, url: str):
         logger.error("Digest job %s failed: %s", job_id, e)
         job["status"] = "failed"
         job["error"] = str(e)
+    finally:
+        # Clean up temp file
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
 
 
 @app.post("/api/digest/url")
