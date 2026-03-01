@@ -326,22 +326,29 @@ async def _try_youtube_description(url: str) -> dict | None:
         return None
 
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
             # Step 1: Get metadata from oEmbed (public, no auth, no bot detection)
             oembed_url = f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"
             oembed_resp = await client.get(oembed_url)
             oembed = oembed_resp.json() if oembed_resp.status_code == 200 else {}
 
             # Step 2: Fetch YouTube page for description
+            # Use consent-bypass cookie to avoid EU consent redirect
             page_resp = await client.get(
                 f"https://www.youtube.com/watch?v={video_id}",
-                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                    "Accept-Language": "en-US,en;q=0.9",
+                },
+                cookies={"CONSENT": "PENDING+999"},
             )
             html = page_resp.text
+            logger.info("YouTube page fetch: status=%d, size=%d", page_resp.status_code, len(html))
 
         # Extract shortDescription from ytInitialPlayerResponse JSON
         match = _re.search(r'shortDescription":"(.*?)(?:",")', html)
         if not match:
+            logger.warning("No shortDescription found in YouTube page for %s (page size: %d)", video_id, len(html))
             return None
 
         raw_desc = match.group(1).replace("\\n", "\n")
@@ -351,6 +358,7 @@ async def _try_youtube_description(url: str) -> dict | None:
             r'(?:^|\n)\s*(?:\d+[\.\)]\s*)?(\d{1,2}:\d{2}(?::\d{2})?)\s+(.+)',
         )
         matches = track_pattern.findall(raw_desc)
+        logger.info("YouTube description: %d timestamp matches for %s", len(matches), video_id)
         if len(matches) < 3:
             # Not enough timestamp lines to be a real tracklist
             return None
