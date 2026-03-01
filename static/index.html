@@ -1370,28 +1370,18 @@ async function connectSpotify() {
     card.style.opacity = '0.6';
     card.onclick = null;
     try {
-        let res = await fetch(`/api/spotify/user/${JAW_SPOTIFY}/playlists`);
-        let profileUsed = 'JAW';
-        if (!res.ok) {
-            res = await fetch(`/api/spotify/user/${PETER_SPOTIFY}/playlists`);
-            profileUsed = 'Peter';
-        }
+        // Test connectivity with a simple search (client credentials can't access user playlists)
+        const res = await fetch('/api/spotify/search?q=test&limit=1');
         if (!res.ok) throw new Error('Spotify not configured');
         const data = await res.json();
+        if (!data.tracks || !data.tracks.items) throw new Error('Spotify search failed');
         spotifyConnected = true;
         card.classList.add('connected');
         card.style.opacity = '1';
         card.querySelector('.cc-status').textContent = 'Connected';
         card.querySelector('.cc-status').style.color = '#1DB954';
         document.getElementById('spotifyLibrary').style.display = 'block';
-        document.getElementById('spotifyUserLabel').textContent = `${data.playlists?.length || 0} playlists loaded`;
-        // Store playlist names for profile analysis
-        spotifyPlaylistNames = (data.playlists || []).map(p => p.name);
-        renderPlaylists(data.playlists || [], profileUsed);
-        // Auto-load first playlist tracks for profile seeding
-        if (data.playlists && data.playlists.length > 0) {
-            loadPlaylistTracksForProfile(data.playlists[0].id);
-        }
+        document.getElementById('spotifyUserLabel').textContent = 'Search Spotify catalog';
         enableStep1Continue();
     } catch (e) {
         card.style.opacity = '1';
@@ -1496,15 +1486,33 @@ async function connectTidal() {
     card.style.opacity = '0.6';
     card.onclick = null;
     try {
+        // Try a live search first
         const res = await fetch('/api/tidal/search?q=electronic&limit=1');
-        if (!res.ok) throw new Error('Tidal not configured');
-        tidalConnected = true;
-        card.classList.add('connected');
-        card.style.opacity = '1';
-        card.querySelector('.cc-status').textContent = 'Connected';
-        card.querySelector('.cc-status').style.color = '#00FFFF';
-        document.getElementById('tidalLibrary').style.display = 'block';
-        enableStep1Continue();
+        if (res.ok) {
+            tidalConnected = true;
+            card.classList.add('connected');
+            card.style.opacity = '1';
+            card.querySelector('.cc-status').textContent = 'Connected';
+            card.querySelector('.cc-status').style.color = '#00FFFF';
+            document.getElementById('tidalLibrary').style.display = 'block';
+            enableStep1Continue();
+            return;
+        }
+        // Search failed — check if Tidal credentials are at least configured
+        const statusRes = await fetch('/api/status');
+        const statusData = await statusRes.json();
+        if (statusData.tidal) {
+            // Credentials exist but token auth failed — show connected with note
+            tidalConnected = true;
+            card.classList.add('connected');
+            card.style.opacity = '1';
+            card.querySelector('.cc-status').textContent = 'Connected (limited)';
+            card.querySelector('.cc-status').style.color = '#00BFFF';
+            document.getElementById('tidalLibrary').style.display = 'block';
+            enableStep1Continue();
+            return;
+        }
+        throw new Error('Tidal not configured');
     } catch (e) {
         card.style.opacity = '1';
         card.onclick = function(){ connectTidal(); };

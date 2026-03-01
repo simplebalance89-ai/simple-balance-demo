@@ -666,7 +666,11 @@ async def get_tidal_token():
             _tidal_token["access_token"] = data["access_token"]
             _tidal_token["expires_at"] = datetime.now() + timedelta(seconds=data.get("expires_in", 86400) - 60)
             return _tidal_token["access_token"]
-    except Exception:
+    except httpx.HTTPStatusError as e:
+        print(f"[Tidal] Auth failed: {e.response.status_code} - {e.response.text[:200]}")
+        return None
+    except Exception as e:
+        print(f"[Tidal] Auth error: {e}")
         return None
 
 
@@ -713,7 +717,9 @@ async def tidal_search(q: str, limit: int = 10, countryCode: str = "US"):
     """Search Tidal catalog for tracks."""
     token = await get_tidal_token()
     if not token:
-        return JSONResponse({"error": "Tidal not configured"}, status_code=503)
+        has_creds = bool(get_secret("TIDAL_CLIENT_ID") and get_secret("TIDAL_CLIENT_SECRET"))
+        msg = "Tidal auth failed (credentials set but token request failed)" if has_creds else "Tidal not configured"
+        return JSONResponse({"error": msg, "configured": has_creds}, status_code=503)
 
     async with httpx.AsyncClient(timeout=15) as http:
         results = await tidal_search_tracks(http, token, q, limit, countryCode)
