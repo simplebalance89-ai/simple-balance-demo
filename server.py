@@ -326,32 +326,25 @@ async def _try_youtube_description(url: str) -> dict | None:
         return None
 
     try:
-        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
-            # Step 1: Get metadata from oEmbed (public, no auth, no bot detection)
-            oembed_url = f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"
-            oembed_resp = await client.get(oembed_url)
-            oembed = oembed_resp.json() if oembed_resp.status_code == 200 else {}
-
-            # Step 2: Fetch YouTube page for description
-            # Use consent-bypass cookie to avoid EU consent redirect
-            page_resp = await client.get(
-                f"https://www.youtube.com/watch?v={video_id}",
-                headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-                    "Accept-Language": "en-US,en;q=0.9",
+        async with httpx.AsyncClient(timeout=15) as client:
+            # Use YouTube's internal player API — works from cloud IPs, no auth needed
+            api_resp = await client.post(
+                "https://www.youtube.com/youtubei/v1/player",
+                json={
+                    "videoId": video_id,
+                    "context": {"client": {"clientName": "WEB", "clientVersion": "2.20240101.00.00"}},
                 },
-                cookies={"CONSENT": "PENDING+999"},
+                headers={"Content-Type": "application/json"},
             )
-            html = page_resp.text
-            logger.info("YouTube page fetch: status=%d, size=%d", page_resp.status_code, len(html))
+            api_data = api_resp.json()
 
-        # Extract shortDescription from ytInitialPlayerResponse JSON
-        match = _re.search(r'shortDescription":"(.*?)(?:",")', html)
-        if not match:
-            logger.warning("No shortDescription found in YouTube page for %s (page size: %d)", video_id, len(html))
+        video_details = api_data.get("videoDetails", {})
+        raw_desc = video_details.get("shortDescription", "")
+        if not raw_desc:
+            logger.warning("No description from YouTube API for %s", video_id)
             return None
 
-        raw_desc = match.group(1).replace("\\n", "\n")
+        logger.info("YouTube API: got description (%d chars) for %s", len(raw_desc), video_id)
 
         # Look for timestamped tracklist lines: "00:00 Artist – Title" or "1. 00:00 Artist - Title"
         track_pattern = _re.compile(
@@ -379,15 +372,15 @@ async def _try_youtube_description(url: str) -> dict | None:
                 "source": "youtube_description",
             })
 
-        # Extract duration from page
-        dur_match = _re.search(r'"lengthSeconds":"(\d+)"', html)
-        duration = int(dur_match.group(1)) if dur_match else 0
+        duration = int(video_details.get("lengthSeconds", 0))
+        thumbnails = video_details.get("thumbnail", {}).get("thumbnails", [])
+        thumbnail_url = thumbnails[-1]["url"] if thumbnails else None
 
         metadata = {
-            "title": oembed.get("title", "Unknown"),
-            "uploader": oembed.get("author_name", "Unknown"),
+            "title": video_details.get("title", "Unknown"),
+            "uploader": video_details.get("author", "Unknown"),
             "duration": duration,
-            "thumbnail": oembed.get("thumbnail_url"),
+            "thumbnail": thumbnail_url,
         }
 
         return {
