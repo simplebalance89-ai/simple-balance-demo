@@ -301,20 +301,131 @@ async def digestor(file: UploadFile = File(...)):
         return JSONResponse({"error": str(e), "tracks": []}, status_code=500)
 
 
+# ── YouTube Description Tracklist Extractor ───────────────────────────────────
+
+def _extract_youtube_id(url: str) -> str | None:
+    """Extract YouTube video ID from various URL formats."""
+    import re as _re
+    patterns = [
+        r'(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/)([A-Za-z0-9_-]{11})',
+    ]
+    for p in patterns:
+        m = _re.search(p, url)
+        if m:
+            return m.group(1)
+    return None
+
+
+async def _try_youtube_description(url: str) -> dict | None:
+    """Try to extract tracklist from YouTube video description.
+    Returns parsed tracks dict or None if no tracklist found."""
+    import re as _re
+
+    video_id = _extract_youtube_id(url)
+    if not video_id:
+        return None
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            # Step 1: Get metadata from oEmbed (public, no auth, no bot detection)
+            oembed_url = f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"
+            oembed_resp = await client.get(oembed_url)
+            oembed = oembed_resp.json() if oembed_resp.status_code == 200 else {}
+
+            # Step 2: Fetch YouTube page for description
+            page_resp = await client.get(
+                f"https://www.youtube.com/watch?v={video_id}",
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+            )
+            html = page_resp.text
+
+        # Extract shortDescription from ytInitialPlayerResponse JSON
+        match = _re.search(r'shortDescription":"(.*?)(?:",")', html)
+        if not match:
+            return None
+
+        raw_desc = match.group(1).replace("\\n", "\n")
+
+        # Look for timestamped tracklist lines: "00:00 Artist – Title" or "1. 00:00 Artist - Title"
+        track_pattern = _re.compile(
+            r'(?:^|\n)\s*(?:\d+[\.\)]\s*)?(\d{1,2}:\d{2}(?::\d{2})?)\s+(.+)',
+        )
+        matches = track_pattern.findall(raw_desc)
+        if len(matches) < 3:
+            # Not enough timestamp lines to be a real tracklist
+            return None
+
+        tracks = []
+        for i, (timestamp, raw_track) in enumerate(matches):
+            raw_track = raw_track.strip()
+            # Try to split "Artist – Title" or "Artist - Title"
+            parts = _re.split(r'\s*[–—-]\s*', raw_track, maxsplit=1)
+            artist = parts[0].strip() if parts else raw_track
+            title = parts[1].strip() if len(parts) > 1 else ""
+
+            tracks.append({
+                "position": i + 1,
+                "timestamp": timestamp,
+                "artist": artist,
+                "title": title,
+                "source": "youtube_description",
+            })
+
+        # Extract duration from page
+        dur_match = _re.search(r'"lengthSeconds":"(\d+)"', html)
+        duration = int(dur_match.group(1)) if dur_match else 0
+
+        metadata = {
+            "title": oembed.get("title", "Unknown"),
+            "uploader": oembed.get("author_name", "Unknown"),
+            "duration": duration,
+            "thumbnail": oembed.get("thumbnail_url"),
+        }
+
+        return {
+            "tracks": tracks,
+            "raw_matches": len(matches),
+            "unique_tracks": len(tracks),
+            "metadata": metadata,
+            "source": "youtube_description",
+        }
+
+    except Exception as e:
+        logger.warning("YouTube description extraction failed: %s", e)
+        return None
+
+
 # ── URL Digest (YouTube / SoundCloud / Mixcloud) ─────────────────────────────
-# Async job pattern: submit URL → get job_id instantly → poll /api/digest/url/status/{job_id}
-# This avoids Render's HTTP request timeout killing long AudD scans (2hr mix = 5-10 min).
+# Strategy:
+#   1. YouTube URLs → try description tracklist first (fast, free, works from cloud)
+#   2. If no description tracklist → fall back to yt-dlp + AudD audio fingerprinting
+#   3. SoundCloud/Mixcloud → yt-dlp + AudD directly
 
 _digest_jobs = {}  # {job_id: {status, metadata, result, error, started_at}}
 
 
 async def _run_digest_job(job_id: str, url: str):
-    """Background coroutine: yt-dlp extract metadata → download audio → AudD file upload → parse."""
+    """Background coroutine. Strategy:
+    1. YouTube → try description tracklist (instant, free)
+    2. Fallback → yt-dlp download + AudD fingerprint (works for SC/MC)"""
     job = _digest_jobs[job_id]
     token = get_secret("AUDD_API_TOKEN")
     tmp_path = None
 
     try:
+        # Strategy 1: YouTube description tracklist (fast path)
+        if _extract_youtube_id(url):
+            job["status"] = "extracting"
+            yt_result = await _try_youtube_description(url)
+            if yt_result and len(yt_result.get("tracks", [])) >= 3:
+                job["metadata"] = yt_result["metadata"]
+                job["result"] = yt_result
+                job["status"] = "done"
+                logger.info("YouTube description tracklist: %s — %d tracks", yt_result["metadata"]["title"], len(yt_result["tracks"]))
+                return
+            # No tracklist in description — fall through to AudD
+
+        # Strategy 2: yt-dlp + AudD audio fingerprinting
         # Step 1: Extract metadata via yt-dlp (quick, no download)
         job["status"] = "extracting"
         info = extract_audio_url(url)
