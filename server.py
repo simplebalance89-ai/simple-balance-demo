@@ -327,24 +327,46 @@ async def _try_youtube_description(url: str) -> dict | None:
 
     try:
         async with httpx.AsyncClient(timeout=15) as client:
-            # Use YouTube's internal player API with ANDROID client + public innertube key
+            # Use YouTube's 'next' endpoint (video page data) — less restricted than 'player'
             api_resp = await client.post(
-                "https://www.youtube.com/youtubei/v1/player?key=AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w",
+                "https://www.youtube.com/youtubei/v1/next?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
                 json={
                     "videoId": video_id,
-                    "context": {"client": {"clientName": "ANDROID", "clientVersion": "19.09.37", "androidSdkVersion": 30}},
+                    "context": {"client": {"clientName": "WEB", "clientVersion": "2.20240101.00.00"}},
                 },
                 headers={"Content-Type": "application/json"},
             )
             api_data = api_resp.json()
 
-        video_details = api_data.get("videoDetails", {})
-        raw_desc = video_details.get("shortDescription", "")
+        # Extract description from structured engagement panels
+        raw_desc = ""
+        title = ""
+        for panel in api_data.get("engagementPanels", []):
+            renderer = panel.get("engagementPanelSectionListRenderer", {})
+            items = renderer.get("content", {}).get("structuredDescriptionContentRenderer", {}).get("items", [])
+            for item in items:
+                body = item.get("expandableVideoDescriptionBodyRenderer", {})
+                desc_text = body.get("attributedDescriptionBodyText", {}).get("content", "")
+                if desc_text:
+                    raw_desc = desc_text
+                    break
+            if raw_desc:
+                break
+
+        # Get title from currentVideoEndpoint or playerOverlays
+        results = api_data.get("contents", {}).get("twoColumnWatchNextResults", {}).get("results", {}).get("results", {}).get("contents", [])
+        for item in results:
+            primary = item.get("videoPrimaryInfoRenderer", {})
+            title_runs = primary.get("title", {}).get("runs", [])
+            if title_runs:
+                title = title_runs[0].get("text", "")
+                break
+
         if not raw_desc:
-            logger.warning("No description from YouTube API for %s", video_id)
+            logger.warning("No description from YouTube next API for %s", video_id)
             return None
 
-        logger.info("YouTube API: got description (%d chars) for %s", len(raw_desc), video_id)
+        logger.info("YouTube next API: got description (%d chars) for %s", len(raw_desc), video_id)
 
         # Look for timestamped tracklist lines: "00:00 Artist – Title" or "1. 00:00 Artist - Title"
         track_pattern = _re.compile(
@@ -372,15 +394,16 @@ async def _try_youtube_description(url: str) -> dict | None:
                 "source": "youtube_description",
             })
 
-        duration = int(video_details.get("lengthSeconds", 0))
-        thumbnails = video_details.get("thumbnail", {}).get("thumbnails", [])
-        thumbnail_url = thumbnails[-1]["url"] if thumbnails else None
+        # Get duration + thumbnail from oEmbed (always works from cloud)
+        async with httpx.AsyncClient(timeout=10) as client:
+            oembed_resp = await client.get(f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json")
+            oembed = oembed_resp.json() if oembed_resp.status_code == 200 else {}
 
         metadata = {
-            "title": video_details.get("title", "Unknown"),
-            "uploader": video_details.get("author", "Unknown"),
-            "duration": duration,
-            "thumbnail": thumbnail_url,
+            "title": title or oembed.get("title", "Unknown"),
+            "uploader": oembed.get("author_name", "Unknown"),
+            "duration": 0,  # oEmbed doesn't provide duration
+            "thumbnail": oembed.get("thumbnail_url"),
         }
 
         return {
@@ -1666,28 +1689,34 @@ async def api_status():
 
 @app.get("/api/debug/yt/{video_id}")
 async def debug_youtube(video_id: str):
-    """Temporary debug endpoint to test YouTube API from Render."""
+    """Temporary debug endpoint to test YouTube next API from Render."""
     import re as _re
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.post(
-                "https://www.youtube.com/youtubei/v1/player?key=AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w",
-                json={"videoId": video_id, "context": {"client": {"clientName": "ANDROID", "clientVersion": "19.09.37", "androidSdkVersion": 30}}},
+                "https://www.youtube.com/youtubei/v1/next?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
+                json={"videoId": video_id, "context": {"client": {"clientName": "WEB", "clientVersion": "2.20240101.00.00"}}},
                 headers={"Content-Type": "application/json"},
             )
         data = resp.json()
-        vd = data.get("videoDetails", {})
-        desc = vd.get("shortDescription", "")
-        tracks = _re.findall(r'(?:^|\n)\s*(?:\d+[\.\)]\s*)?(\d{1,2}:\d{2}(?::\d{2})?)\s+(.+)', desc)
+        desc = ""
+        for panel in data.get("engagementPanels", []):
+            renderer = panel.get("engagementPanelSectionListRenderer", {})
+            items = renderer.get("content", {}).get("structuredDescriptionContentRenderer", {}).get("items", [])
+            for item in items:
+                body = item.get("expandableVideoDescriptionBodyRenderer", {})
+                desc = body.get("attributedDescriptionBodyText", {}).get("content", "")
+                if desc:
+                    break
+            if desc:
+                break
+        tracks = _re.findall(r'(\d{1,2}:\d{2}(?::\d{2})?)\s+(.+?)(?:\n|$)', desc)
         return {
             "status_code": resp.status_code,
-            "has_video_details": bool(vd),
-            "title": vd.get("title"),
-            "author": vd.get("author"),
             "desc_length": len(desc),
             "desc_preview": desc[:500],
             "timestamp_tracks": len(tracks),
-            "playability": data.get("playabilityStatus", {}).get("status"),
+            "tracks_preview": [{"ts": ts, "name": n.strip()} for ts, n in tracks[:5]],
         }
     except Exception as e:
         return {"error": str(e)}
