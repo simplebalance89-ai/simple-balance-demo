@@ -2694,6 +2694,8 @@ function resetDigestor() {
     if (mixFile) mixFile.value = '';
 }
 
+var _digestPollTimers = {};
+
 function _digestUrlCommon(urlInputId, statusId, metaId, resultsId, onSuccess) {
     var url = document.getElementById(urlInputId).value.trim();
     if (!url) return;
@@ -2703,18 +2705,14 @@ function _digestUrlCommon(urlInputId, statusId, metaId, resultsId, onSuccess) {
     var results = document.getElementById(resultsId);
 
     status.style.display = 'block';
-    status.innerHTML = '<div style="font-size:0.85rem;color:#D4A017;">Extracting audio from URL...</div>' +
+    status.innerHTML = '<div style="font-size:0.85rem;color:#D4A017;">Submitting URL...</div>' +
         '<div style="width:100%;height:4px;background:rgba(255,255,255,0.06);border-radius:2px;margin-top:12px;overflow:hidden;">' +
-        '<div id="' + statusId + 'Bar" style="width:15%;height:100%;background:linear-gradient(90deg,#D4A017,#FFE082);border-radius:2px;transition:width 0.5s ease;"></div></div>';
+        '<div id="' + statusId + 'Bar" style="width:5%;height:100%;background:linear-gradient(90deg,#D4A017,#FFE082);border-radius:2px;transition:width 0.5s ease;"></div></div>' +
+        '<div id="' + statusId + 'Elapsed" style="font-size:0.65rem;color:#666;margin-top:6px;"></div>';
     if (meta) { meta.style.display = 'none'; meta.innerHTML = ''; }
     if (results) { results.style.display = 'none'; results.innerHTML = ''; }
 
-    var bar = document.getElementById(statusId + 'Bar');
-    setTimeout(function(){ if(bar) bar.style.width = '30%'; status.querySelector('div').textContent = 'Sending to AudD Enterprise...'; }, 3000);
-    setTimeout(function(){ if(bar) bar.style.width = '50%'; status.querySelector('div').textContent = 'Fingerprinting audio segments...'; }, 10000);
-    setTimeout(function(){ if(bar) bar.style.width = '70%'; status.querySelector('div').textContent = 'Still scanning... large mixes take a few minutes'; }, 30000);
-    setTimeout(function(){ if(bar) bar.style.width = '85%'; }, 60000);
-
+    // Step 1: Submit URL — get job_id back instantly
     fetch('/api/digest/url', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -2722,27 +2720,86 @@ function _digestUrlCommon(urlInputId, statusId, metaId, resultsId, onSuccess) {
     })
     .then(function(r){ return r.json(); })
     .then(function(data){
-        if(bar) bar.style.width = '100%';
-        if (data.error && (!data.tracks || data.tracks.length === 0)) {
+        if (data.error) {
             status.innerHTML = '<div style="font-size:0.85rem;color:#C41E3A;">Error: ' + data.error + '</div>';
-            // Still show metadata if available
-            if (data.metadata && meta) {
-                var m = data.metadata;
-                var dur = m.duration ? formatDuration(m.duration) : '';
-                meta.style.display = 'block';
-                meta.innerHTML = '<div style="display:flex;gap:12px;align-items:center;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:12px;margin-top:8px;">' +
-                    (m.thumbnail ? '<img src="' + m.thumbnail + '" style="width:80px;height:60px;border-radius:8px;object-fit:cover;">' : '') +
-                    '<div style="flex:1;"><div style="font-size:0.85rem;color:#fff;">' + (m.title || '') + '</div><div style="font-size:0.7rem;color:#8A7A5A;">' + (m.uploader || '') + (dur ? ' &bull; ' + dur : '') + '</div></div></div>';
-            }
             return;
         }
-        status.style.display = 'none';
-        renderDigestResults(results, data, meta);
-        if (onSuccess) onSuccess(data);
+        var jobId = data.job_id;
+        if (!jobId) {
+            status.innerHTML = '<div style="font-size:0.85rem;color:#C41E3A;">No job ID returned</div>';
+            return;
+        }
+
+        // Step 2: Poll for results every 4 seconds
+        var pollKey = statusId + '_poll';
+        if (_digestPollTimers[pollKey]) clearInterval(_digestPollTimers[pollKey]);
+
+        var STATUS_MESSAGES = {
+            'queued': 'Queued for processing...',
+            'extracting': 'Extracting audio from URL...',
+            'scanning': 'AudD is fingerprinting the mix...',
+            'parsing': 'Parsing tracklist results...'
+        };
+
+        _digestPollTimers[pollKey] = setInterval(function() {
+            fetch('/api/digest/url/status/' + jobId)
+            .then(function(r){ return r.json(); })
+            .then(function(poll){
+                var bar = document.getElementById(statusId + 'Bar');
+                var msgEl = status.querySelector('div');
+                var elapsedEl = document.getElementById(statusId + 'Elapsed');
+                var elapsed = poll.elapsed_seconds || 0;
+                if (elapsedEl) elapsedEl.textContent = elapsed + 's elapsed';
+
+                // Show metadata card as soon as it's available
+                if (poll.metadata && meta && meta.innerHTML === '') {
+                    var m = poll.metadata;
+                    var dur = m.duration ? formatDuration(m.duration) : '';
+                    meta.style.display = 'block';
+                    meta.innerHTML = '<div style="display:flex;gap:12px;align-items:center;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:12px;margin-bottom:8px;">' +
+                        (m.thumbnail ? '<img src="' + m.thumbnail + '" style="width:80px;height:60px;border-radius:8px;object-fit:cover;">' : '') +
+                        '<div style="flex:1;min-width:0;"><div style="font-size:0.85rem;font-weight:700;color:#FFFEF7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (m.title || 'Unknown') + '</div>' +
+                        '<div style="font-size:0.7rem;color:#8A7A5A;">' + (m.uploader || '') + (dur ? ' &bull; ' + dur : '') + '</div></div></div>';
+                }
+
+                // Update progress bar based on status
+                if (poll.status === 'extracting') { if(bar) bar.style.width = '15%'; }
+                else if (poll.status === 'scanning') {
+                    // Scanning is the long phase — estimate progress based on duration
+                    var duration = (poll.metadata && poll.metadata.duration) || 7200;
+                    // Rough estimate: AudD processes ~10-20x realtime
+                    var scanPct = Math.min(85, 20 + (elapsed / (duration / 15)) * 65);
+                    if(bar) bar.style.width = scanPct + '%';
+                }
+                else if (poll.status === 'parsing') { if(bar) bar.style.width = '90%'; }
+
+                if (msgEl) msgEl.textContent = STATUS_MESSAGES[poll.status] || poll.status;
+
+                // Done!
+                if (poll.status === 'done') {
+                    clearInterval(_digestPollTimers[pollKey]);
+                    if(bar) bar.style.width = '100%';
+                    status.style.display = 'none';
+                    if (poll.result) {
+                        renderDigestResults(results, poll.result, null);
+                        if (onSuccess) onSuccess(poll.result);
+                    }
+                }
+
+                // Failed
+                if (poll.status === 'failed') {
+                    clearInterval(_digestPollTimers[pollKey]);
+                    if(bar) bar.style.width = '100%';
+                    status.innerHTML = '<div style="font-size:0.85rem;color:#C41E3A;">Error: ' + (poll.error || 'Unknown error') + '</div>';
+                }
+            })
+            .catch(function(){
+                // Network blip — keep polling, don't kill the job
+            });
+        }, 4000);
     })
     .catch(function(err){
-        if(bar) bar.style.width = '100%';
-        status.innerHTML = '<div style="font-size:0.85rem;color:#C41E3A;">Failed: ' + err.message + '</div>';
+        status.innerHTML = '<div style="font-size:0.85rem;color:#C41E3A;">Failed to submit: ' + err.message + '</div>';
     });
 }
 
