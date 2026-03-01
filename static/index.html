@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="version" content="1.0">
+<meta name="version" content="2.0">
 <meta property="og:title" content="Simple Balance Music - AI Music Production Suite">
 <meta property="og:description" content="AI-powered music production suite. Create beats, master tracks, separate stems, and build DJ sets.">
 <meta property="og:type" content="website">
@@ -810,6 +810,142 @@
         flex-shrink: 0;
     }
 
+    /* ===== FEATURE BADGES ===== */
+    .status-badge {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 6px;
+        vertical-align: middle;
+    }
+    .badge-green { background: #22c55e; }
+    .badge-amber { background: #f59e0b; }
+    .badge-gray { background: #6b7280; }
+    .feature-card {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 14px;
+        padding: 16px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-align: center;
+    }
+    .feature-card:hover:not(.disabled) {
+        border-color: rgba(212,160,23,0.3);
+        background: rgba(212,160,23,0.04);
+        transform: translateY(-1px);
+    }
+    .feature-card.disabled {
+        opacity: 0.5;
+        pointer-events: none;
+        cursor: default;
+    }
+    .feature-card .fc-icon { font-size: 1.5rem; margin-bottom: 6px; }
+    .feature-card .fc-name {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #FFE082;
+        margin-bottom: 4px;
+    }
+    .feature-card .fc-desc {
+        font-size: 0.7rem;
+        color: #8A7A5A;
+        line-height: 1.3;
+    }
+    .feature-card .fc-badge-label {
+        font-size: 0.55rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-top: 6px;
+        font-weight: 700;
+    }
+    .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        width: 100%;
+        max-width: 600px;
+    }
+    .connect-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        width: 100%;
+        max-width: 500px;
+    }
+    .connect-card {
+        background: rgba(255,255,255,0.03);
+        border: 2px solid rgba(255,255,255,0.06);
+        border-radius: 14px;
+        padding: 18px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-align: center;
+    }
+    .connect-card:hover:not(.disabled) {
+        border-color: rgba(212,160,23,0.3);
+        transform: translateY(-2px);
+    }
+    .connect-card.disabled {
+        opacity: 0.5;
+        pointer-events: none;
+    }
+    .connect-card.connected {
+        border-color: #1DB954;
+        background: rgba(29,185,84,0.08);
+    }
+    .connect-card .cc-icon { font-size: 1.8rem; margin-bottom: 6px; }
+    .connect-card .cc-name {
+        font-size: 0.9rem;
+        font-weight: 700;
+        color: #FFE082;
+    }
+    .connect-card .cc-status {
+        font-size: 0.65rem;
+        margin-top: 4px;
+    }
+    /* Profile card */
+    .profile-card {
+        background: rgba(212,160,23,0.06);
+        border: 1px solid rgba(212,160,23,0.2);
+        border-radius: 16px;
+        padding: 20px;
+        width: 100%;
+        max-width: 500px;
+    }
+    .profile-card h3 {
+        font-family: 'Playfair Display', serif;
+        font-size: 1.1rem;
+        color: #FFE082;
+        margin-bottom: 12px;
+        text-align: center;
+    }
+    .profile-stat {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.04);
+        font-size: 0.8rem;
+    }
+    .profile-stat:last-child { border-bottom: none; }
+    .profile-stat .ps-label { color: #8A7A5A; }
+    .profile-stat .ps-value { color: #FFE082; font-weight: 700; }
+    .profile-genres {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+    }
+    .profile-genre-tag {
+        padding: 4px 10px;
+        border-radius: 12px;
+        background: rgba(212,160,23,0.12);
+        color: #D4A017;
+        font-size: 0.7rem;
+        font-weight: 600;
+    }
+
     /* ===== RESPONSIVE ===== */
     @media (max-width: 600px) {
         .role-grid { grid-template-columns: repeat(2, 1fr); }
@@ -818,11 +954,14 @@
         .analysis-grid { grid-template-columns: 1fr; }
         .before-after { grid-template-columns: 1fr; }
         .gen-details { grid-template-columns: repeat(3, 1fr); }
+        .feature-grid { grid-template-columns: repeat(2, 1fr); }
+        .connect-grid { grid-template-columns: 1fr; }
     }
     @media (max-width: 400px) {
         .cap-grid { grid-template-columns: repeat(2, 1fr); }
         .genre-grid { grid-template-columns: 1fr; }
         .mood-grid { grid-template-columns: 1fr; }
+        .feature-grid { grid-template-columns: 1fr; }
     }
 </style>
 </head>
@@ -857,6 +996,10 @@
     </div>
     <div class="progress-step">
         <div class="progress-dot" data-step="4"></div>
+        <div class="progress-line" data-line="4"></div>
+    </div>
+    <div class="progress-step">
+        <div class="progress-dot" data-step="5"></div>
     </div>
     <span class="progress-label" id="progressLabel"></span>
 </div>
@@ -869,149 +1012,162 @@
         <div class="welcome-screen">
             <div class="welcome-eyebrow">LIVE AI DEMO</div>
             <h1 class="welcome-title">Welcome to Simple Balance Music</h1>
-            <p class="welcome-desc">AI-powered music production suite. Create beats, master tracks, separate stems, and build DJ sets.</p>
-            <p class="welcome-sub">The future of music production</p>
+            <p class="welcome-desc">AI-powered music production suite. Connect your music, build your taste profile, and unlock every tool.</p>
+            <p class="welcome-sub">Connect &rarr; Analyze &rarr; Explore &rarr; Create &rarr; Library</p>
             <button class="welcome-cta" onclick="goToStep(1)">Start Experience</button>
-            <div style="margin-top:20px;display:flex;flex-direction:column;align-items:center;gap:10px;">
-                <button id="spotifyConnectBtn" onclick="connectSpotify()" style="padding:12px 32px;border-radius:24px;border:2px solid #1DB954;background:transparent;color:#1DB954;font-family:'Nunito',sans-serif;font-size:0.9rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px;">
-                    🎵 Connect Spotify
-                </button>
-                <div id="spotifyStatus" style="display:none;"></div>
-                <span style="font-size:0.7rem;color:#444;letter-spacing:1px;">TIDAL — COMING SOON</span>
-            </div>
-            <!-- Spotify Library Panel (hidden until connected) -->
-            <div id="spotifyLibrary" style="display:none;margin-top:20px;width:100%;max-width:500px;">
-                <div style="background:rgba(29,185,84,0.1);border:1px solid rgba(29,185,84,0.3);border-radius:12px;padding:16px;">
-                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-                        <span style="font-family:'Playfair Display',serif;font-size:1rem;color:#1DB954;">Spotify Connected</span>
-                        <span id="spotifyUserLabel" style="font-size:0.75rem;color:#888;"></span>
-                    </div>
-                    <div style="display:flex;gap:8px;margin-bottom:12px;">
-                        <input type="text" id="spotifySearchInput" placeholder="Search tracks, artists..." style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid #333;background:#1a1a2e;color:#fff;font-family:'Nunito',sans-serif;font-size:0.8rem;" onkeydown="if(event.key==='Enter')spotifySearch()">
-                        <button onclick="spotifySearch()" style="padding:8px 16px;border-radius:8px;border:none;background:#1DB954;color:#fff;font-weight:700;cursor:pointer;font-size:0.8rem;">Search</button>
-                    </div>
-                    <div id="spotifyPlaylists" style="max-height:200px;overflow-y:auto;"></div>
-                    <div id="spotifyResults" style="max-height:250px;overflow-y:auto;margin-top:8px;"></div>
-                </div>
-            </div>
             <div class="welcome-powered">POWERED BY CAPO AI</div>
         </div>
     </div>
 
-    <!-- STEP 1: WHO ARE YOU -->
+    <!-- STEP 1: CONNECT YOUR MUSIC -->
     <div class="step" id="step1">
         <div class="pick-header">
-            <h2>What's your name?</h2>
-            <p>Optional. Just lets us personalize things.</p>
+            <h2>Connect Your Music</h2>
+            <p>Link a streaming account or upload a mix to get started</p>
         </div>
         <div class="name-input-wrap">
-            <input type="text" class="name-input" id="userName" placeholder="Enter your name (optional)" maxlength="30">
+            <input type="text" class="name-input" id="userName" placeholder="Your name (optional)" maxlength="30">
         </div>
-        <div class="pick-header">
-            <h2>Pick your role</h2>
-            <p>Tap the one that fits</p>
+        <div class="connect-grid" id="connectGrid">
+            <!-- Spotify — GREEN (functional) -->
+            <div class="connect-card" id="spotifyCard" onclick="connectSpotify()">
+                <div class="cc-icon">🎵</div>
+                <div class="cc-name"><span class="status-badge badge-green"></span>Spotify</div>
+                <div class="cc-status" style="color:#22c55e;">Ready to connect</div>
+            </div>
+            <!-- Tidal — AMBER (code exists, needs testing) -->
+            <div class="connect-card" style="border-color:rgba(245,158,11,0.3);">
+                <div class="cc-icon">🌊</div>
+                <div class="cc-name"><span class="status-badge badge-amber"></span>Tidal</div>
+                <div class="cc-status" style="color:#f59e0b;">Coming soon</div>
+            </div>
+            <!-- Apple Music — GRAY/TBD -->
+            <div class="connect-card disabled">
+                <div class="cc-icon">🍎</div>
+                <div class="cc-name"><span class="status-badge badge-gray"></span>Apple Music</div>
+                <div class="cc-status" style="color:#6b7280;">Coming in v2</div>
+            </div>
+            <!-- iCloud Music Library — GRAY/TBD -->
+            <div class="connect-card disabled">
+                <div class="cc-icon">☁️</div>
+                <div class="cc-name"><span class="status-badge badge-gray"></span>iCloud Library</div>
+                <div class="cc-status" style="color:#6b7280;">Coming in v2</div>
+            </div>
+            <!-- OneDrive Music — GRAY/TBD -->
+            <div class="connect-card disabled">
+                <div class="cc-icon">📁</div>
+                <div class="cc-name"><span class="status-badge badge-gray"></span>OneDrive Music</div>
+                <div class="cc-status" style="color:#6b7280;">Coming in v2</div>
+            </div>
+            <!-- Upload Mix -->
+            <div class="connect-card" onclick="document.getElementById('step1MixFile').click()" style="border-color:rgba(212,160,23,0.3);">
+                <div class="cc-icon">🔬</div>
+                <div class="cc-name"><span class="status-badge badge-green"></span>Upload Mix</div>
+                <div class="cc-status" style="color:#22c55e;">AudD Digestor</div>
+                <input type="file" id="step1MixFile" accept="audio/*" style="display:none" onchange="uploadMixStep1(this)">
+            </div>
         </div>
-        <div class="role-grid" id="roleGrid">
-            <div class="role-card" data-role="dj" onclick="selectRole(this)">
-                <div class="role-icon">🎧</div>
-                <div class="rc-name">DJ</div>
-                <div class="rc-desc">Build sets, mix tracks, find events</div>
-            </div>
-            <div class="role-card" data-role="producer" onclick="selectRole(this)">
-                <div class="role-icon">🎛️</div>
-                <div class="rc-name">Producer</div>
-                <div class="rc-desc">Create beats, master audio, separate stems</div>
-            </div>
-            <div class="role-card" data-role="artist" onclick="selectRole(this)">
-                <div class="role-icon">🎤</div>
-                <div class="rc-name">Artist</div>
-                <div class="rc-desc">Generate lyrics, find your sound</div>
-            </div>
-            <div class="role-card" data-role="listener" onclick="selectRole(this)">
-                <div class="role-icon">🎵</div>
-                <div class="rc-name">Listener</div>
-                <div class="rc-desc">Discover new music, explore moods</div>
+        <!-- Spotify Library Panel (hidden until connected) -->
+        <div id="spotifyLibrary" style="display:none;margin-top:20px;width:100%;max-width:500px;">
+            <div style="background:rgba(29,185,84,0.1);border:1px solid rgba(29,185,84,0.3);border-radius:12px;padding:16px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                    <span style="font-family:'Playfair Display',serif;font-size:1rem;color:#1DB954;">Spotify Connected</span>
+                    <span id="spotifyUserLabel" style="font-size:0.75rem;color:#888;"></span>
+                </div>
+                <div style="display:flex;gap:8px;margin-bottom:12px;">
+                    <input type="text" id="spotifySearchInput" placeholder="Search tracks, artists..." style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid #333;background:#1a1a2e;color:#fff;font-family:'Nunito',sans-serif;font-size:0.8rem;" onkeydown="if(event.key==='Enter')spotifySearch()">
+                    <button onclick="spotifySearch()" style="padding:8px 16px;border-radius:8px;border:none;background:#1DB954;color:#fff;font-weight:700;cursor:pointer;font-size:0.8rem;">Search</button>
+                </div>
+                <div id="spotifyPlaylists" style="max-height:200px;overflow-y:auto;"></div>
+                <div id="spotifyResults" style="max-height:250px;overflow-y:auto;margin-top:8px;"></div>
             </div>
         </div>
+        <div id="spotifyStatus" style="display:none;"></div>
+        <!-- Mix upload status -->
+        <div id="step1MixStatus" style="display:none;margin-top:16px;width:100%;max-width:500px;text-align:center;"></div>
+        <div id="step1MixResults" style="display:none;margin-top:12px;width:100%;max-width:500px;"></div>
         <div class="step-nav">
             <button class="nav-btn secondary" onclick="goToStep(0)">Back</button>
             <button class="nav-btn primary" id="step1Next" onclick="goToStep(2)" disabled>Continue</button>
         </div>
     </div>
 
-    <!-- STEP 2: PICK YOUR MODE -->
+    <!-- STEP 2: YOUR MUSIC PROFILE -->
     <div class="step" id="step2">
         <div class="pick-header">
-            <h2>Pick Your Mode</h2>
-            <p>Tap to explore</p>
+            <h2>Your Music Profile</h2>
+            <p>Analyze your connected music to build your taste profile</p>
         </div>
-        <div class="mode-grid" id="modeGrid">
-            <div class="mode-card" data-mode="jaw" onclick="selectMode(this)">
-                <div class="mode-icon">🧠</div>
-                <div class="mc-name">J.A.W. DJ Command</div>
-                <div class="mc-desc">Your DJ advisor and energy flow guardian</div>
+        <div style="text-align:center;width:100%;max-width:500px;">
+            <button class="nav-btn primary" id="analyzeBtn" onclick="analyzeMyMusic()" style="font-size:1rem;padding:16px 40px;margin-bottom:20px;">
+                Analyze My Music
+            </button>
+            <div id="analyzeStatus" style="display:none;margin-bottom:16px;">
+                <div style="font-size:0.85rem;color:#D4A017;" id="analyzeMsg">Analyzing your taste...</div>
+                <div style="width:100%;height:4px;background:rgba(255,255,255,0.06);border-radius:2px;margin-top:12px;overflow:hidden;">
+                    <div id="analyzeBar" style="width:0%;height:100%;background:linear-gradient(90deg,#D4A017,#FFE082);border-radius:2px;transition:width 0.5s ease;"></div>
+                </div>
             </div>
-            <div class="mode-card" data-mode="discovery" onclick="selectMode(this)">
-                <div class="mode-icon">🔍</div>
-                <div class="mc-name">Music Discovery</div>
-                <div class="mc-desc">Find music by mood, genre, or vibe</div>
-            </div>
-            <div class="mode-card" data-mode="mastering" onclick="selectMode(this)">
-                <div class="mode-icon">🎚️</div>
-                <div class="mc-name">AI Mastering</div>
-                <div class="mc-desc">Master your tracks with AI precision</div>
-            </div>
-            <div class="mode-card" data-mode="stems" onclick="selectMode(this)">
-                <div class="mode-icon">🔀</div>
-                <div class="mc-name">Stem Separation</div>
-                <div class="mc-desc">Split any track into vocals, drums, bass</div>
-            </div>
-            <div class="mode-card" data-mode="generation" onclick="selectMode(this)">
-                <div class="mode-icon">✨</div>
-                <div class="mc-name">AI Generation</div>
-                <div class="mc-desc">Generate beats, MIDI, and full tracks</div>
-            </div>
-            <div class="mode-card" data-mode="events" onclick="selectMode(this)">
-                <div class="mode-icon">📍</div>
-                <div class="mc-name">Events Radar</div>
-                <div class="mc-desc">Find festivals, shows, and events near you</div>
-            </div>
-            <div class="mode-card" data-mode="setbuilder" onclick="selectMode(this)">
-                <div class="mode-icon">📋</div>
-                <div class="mc-name">Set Builder</div>
-                <div class="mc-desc">Build DJ sets with harmonic matching</div>
-            </div>
-            <div class="mode-card" data-mode="archive" onclick="selectMode(this)">
-                <div class="mode-icon">💾</div>
-                <div class="mc-name">Mix Archive</div>
-                <div class="mc-desc">Store and analyze your recorded mixes</div>
-            </div>
-            <div class="mode-card" data-mode="tools" onclick="selectMode(this)">
-                <div class="mode-icon">🛠️</div>
-                <div class="mc-name">Producer Tools</div>
-                <div class="mc-desc">Reference analysis, scales, drum grids</div>
-            </div>
-            <div class="mode-card" data-mode="digestor" onclick="selectMode(this)">
-                <div class="mode-icon">🔬</div>
-                <div class="mc-name">Mix Digestor</div>
-                <div class="mc-desc">Extract tracklists from recorded DJ mixes</div>
-            </div>
-            <div class="mode-card" data-mode="dashboard" onclick="selectMode(this)">
-                <div class="mode-icon">📊</div>
-                <div class="mc-name">Dashboard</div>
-                <div class="mc-desc">Track your stats and workflow</div>
-            </div>
+            <div id="profileCard" style="display:none;"></div>
         </div>
         <div class="step-nav">
             <button class="nav-btn secondary" onclick="goToStep(1)">Back</button>
-            <button class="nav-btn primary" id="step2Next" onclick="goToStep(3)" disabled>Continue</button>
+            <button class="nav-btn primary" id="step2Next" onclick="goToStep(3)">Continue</button>
         </div>
     </div>
 
-    <!-- STEP 3: EXPERIENCE IT -->
+    <!-- STEP 3: EXPLORE -->
     <div class="step" id="step3">
-        <div class="experience-area" id="experienceArea">
-            <!-- Populated dynamically by JS -->
+        <div class="pick-header">
+            <h2>Explore</h2>
+            <p>Discover music, find events, and build sets</p>
+        </div>
+        <div class="feature-grid" id="exploreGrid">
+            <!-- J.A.W. AI Chat — GREEN -->
+            <div class="feature-card" data-mode="jaw" onclick="launchMode('jaw')">
+                <div class="fc-icon">🧠</div>
+                <div class="fc-name"><span class="status-badge badge-green"></span>J.A.W. Chat</div>
+                <div class="fc-desc">Your AI DJ advisor</div>
+                <div class="fc-badge-label" style="color:#22c55e;">Functional</div>
+            </div>
+            <!-- Music Discovery — AMBER -->
+            <div class="feature-card" data-mode="discovery" onclick="launchMode('discovery')">
+                <div class="fc-icon">🔍</div>
+                <div class="fc-name"><span class="status-badge badge-amber"></span>Discovery</div>
+                <div class="fc-desc">Find music by mood</div>
+                <div class="fc-badge-label" style="color:#f59e0b;">Testing</div>
+            </div>
+            <!-- Events Radar — GRAY/TBD -->
+            <div class="feature-card disabled" data-mode="events">
+                <div class="fc-icon">📍</div>
+                <div class="fc-name"><span class="status-badge badge-gray"></span>Events Radar</div>
+                <div class="fc-desc">Find events near you</div>
+                <div class="fc-badge-label" style="color:#6b7280;">TBD — No API keys</div>
+            </div>
+            <!-- Set Builder — GREEN -->
+            <div class="feature-card" data-mode="setbuilder" onclick="launchMode('setbuilder')">
+                <div class="fc-icon">📋</div>
+                <div class="fc-name"><span class="status-badge badge-green"></span>Set Builder</div>
+                <div class="fc-desc">Build DJ sets</div>
+                <div class="fc-badge-label" style="color:#22c55e;">Functional</div>
+            </div>
+            <!-- Mix Digestor — GREEN -->
+            <div class="feature-card" data-mode="digestor" onclick="launchMode('digestor')">
+                <div class="fc-icon">🔬</div>
+                <div class="fc-name"><span class="status-badge badge-green"></span>Mix Digestor</div>
+                <div class="fc-desc">Extract tracklists from mixes</div>
+                <div class="fc-badge-label" style="color:#22c55e;">Functional</div>
+            </div>
+            <!-- Dashboard — GRAY/TBD -->
+            <div class="feature-card disabled" data-mode="dashboard">
+                <div class="fc-icon">📊</div>
+                <div class="fc-name"><span class="status-badge badge-gray"></span>Dashboard</div>
+                <div class="fc-desc">Track your stats</div>
+                <div class="fc-badge-label" style="color:#6b7280;">TBD — Hardcoded</div>
+            </div>
+        </div>
+        <div class="experience-area" id="experienceArea" style="margin-top:20px;">
+            <!-- Populated dynamically by JS when a mode is launched -->
         </div>
         <div class="step-nav">
             <button class="nav-btn secondary" onclick="goToStep(2)">Back</button>
@@ -1019,60 +1175,88 @@
         </div>
     </div>
 
-    <!-- STEP 4: WHAT CAN IT DO -->
+    <!-- STEP 4: CREATE -->
     <div class="step" id="step4">
-        <div class="capabilities-section">
-            <h2>What Can It Do?</h2>
-            <p class="cap-sub">Simple Balance Music has 11 production modes built in</p>
-            <div class="cap-grid">
-                <div class="cap-item">
-                    <div class="cap-icon-circle">🧠</div>
-                    <div class="cap-label">J.A.W. DJ<br>Command</div>
+        <div class="pick-header">
+            <h2>Create</h2>
+            <p>Master tracks, separate stems, generate audio, and produce</p>
+        </div>
+        <div class="feature-grid" id="createGrid">
+            <!-- AI Mastering (Pedalboard) — AMBER -->
+            <div class="feature-card" data-mode="mastering" onclick="launchMode('mastering')">
+                <div class="fc-icon">🎚️</div>
+                <div class="fc-name"><span class="status-badge badge-amber"></span>AI Mastering</div>
+                <div class="fc-desc">Master your tracks with AI</div>
+                <div class="fc-badge-label" style="color:#f59e0b;">Testing</div>
+            </div>
+            <!-- AI Mastering (Dolby.io) — GRAY/TBD -->
+            <div class="feature-card disabled">
+                <div class="fc-icon">🎚️</div>
+                <div class="fc-name"><span class="status-badge badge-gray"></span>Dolby Mastering</div>
+                <div class="fc-desc">Dolby.io mastering</div>
+                <div class="fc-badge-label" style="color:#6b7280;">TBD</div>
+            </div>
+            <!-- Stem Separation — GREEN -->
+            <div class="feature-card" data-mode="stems" onclick="launchMode('stems')">
+                <div class="fc-icon">🔀</div>
+                <div class="fc-name"><span class="status-badge badge-green"></span>Stem Separation</div>
+                <div class="fc-desc">Split into vocals, drums, bass</div>
+                <div class="fc-badge-label" style="color:#22c55e;">Functional</div>
+            </div>
+            <!-- MusicGen Audio — GREEN -->
+            <div class="feature-card" data-mode="generation" onclick="launchMode('generation')">
+                <div class="fc-icon">✨</div>
+                <div class="fc-name"><span class="status-badge badge-green"></span>AI Generation</div>
+                <div class="fc-desc">Generate beats and audio</div>
+                <div class="fc-badge-label" style="color:#22c55e;">Functional</div>
+            </div>
+            <!-- Producer Tools — AMBER -->
+            <div class="feature-card" data-mode="tools" onclick="launchMode('tools')">
+                <div class="fc-icon">🛠️</div>
+                <div class="fc-name"><span class="status-badge badge-amber"></span>Producer Tools</div>
+                <div class="fc-desc">Scales, analysis, drum grids</div>
+                <div class="fc-badge-label" style="color:#f59e0b;">Testing</div>
+            </div>
+        </div>
+        <div class="experience-area" id="createExperienceArea" style="margin-top:20px;">
+            <!-- Populated dynamically by JS when a mode is launched -->
+        </div>
+        <div class="step-nav">
+            <button class="nav-btn secondary" onclick="goToStep(3)">Back</button>
+            <button class="nav-btn primary" onclick="goToStep(5)">Continue</button>
+        </div>
+    </div>
+
+    <!-- STEP 5: YOUR LIBRARY -->
+    <div class="step" id="step5">
+        <div class="pick-header">
+            <h2>Your Library</h2>
+            <p>Uploaded mixes, digestor results, saved sets, and your archive</p>
+        </div>
+        <div style="width:100%;max-width:600px;">
+            <!-- Upload Mix (prominent) -->
+            <div style="background:rgba(255,255,255,0.03);border:2px dashed rgba(212,160,23,0.3);border-radius:16px;padding:24px;text-align:center;margin-bottom:16px;cursor:pointer;" onclick="document.getElementById('libraryMixFile').click()">
+                <div style="font-size:2rem;margin-bottom:6px;">🔬</div>
+                <div style="font-family:'Playfair Display',serif;font-size:1rem;color:#FFE082;margin-bottom:4px;">Upload a Mix</div>
+                <div style="font-size:0.7rem;color:#8A7A5A;">Run AudD Digestor to extract tracklist</div>
+                <input type="file" id="libraryMixFile" accept="audio/*" style="display:none" onchange="uploadMixLibrary(this)">
+            </div>
+            <div id="libraryMixStatus" style="display:none;text-align:center;padding:12px;font-size:0.85rem;color:#D4A017;"></div>
+            <div id="libraryMixResults" style="display:none;margin-bottom:16px;"></div>
+            <!-- Mix Archive -->
+            <div style="margin-top:16px;">
+                <div style="font-family:'Playfair Display',serif;font-size:0.95rem;color:#FFE082;margin-bottom:10px;"><span class="status-badge badge-green"></span>Mix Archive</div>
+                <div style="background:rgba(255,255,255,0.03);border:2px dashed rgba(212,160,23,0.3);border-radius:16px;padding:24px;text-align:center;margin-bottom:16px;cursor:pointer;" onclick="document.getElementById('archiveFile5').click()">
+                    <div style="font-size:1.5rem;margin-bottom:4px;">💾</div>
+                    <div style="font-size:0.8rem;color:#FFE082;">Upload to Archive</div>
+                    <input type="file" id="archiveFile5" accept="audio/*" style="display:none" onchange="uploadArchiveStep5(this)">
                 </div>
-                <div class="cap-item">
-                    <div class="cap-icon-circle">🔍</div>
-                    <div class="cap-label">Music<br>Discovery</div>
-                </div>
-                <div class="cap-item">
-                    <div class="cap-icon-circle">🎚️</div>
-                    <div class="cap-label">AI<br>Mastering</div>
-                </div>
-                <div class="cap-item">
-                    <div class="cap-icon-circle">🔀</div>
-                    <div class="cap-label">Stem<br>Separation</div>
-                </div>
-                <div class="cap-item">
-                    <div class="cap-icon-circle">✨</div>
-                    <div class="cap-label">AI<br>Generation</div>
-                </div>
-                <div class="cap-item">
-                    <div class="cap-icon-circle">📍</div>
-                    <div class="cap-label">Events<br>Radar</div>
-                </div>
-                <div class="cap-item">
-                    <div class="cap-icon-circle">📋</div>
-                    <div class="cap-label">Set<br>Builder</div>
-                </div>
-                <div class="cap-item">
-                    <div class="cap-icon-circle">💾</div>
-                    <div class="cap-label">Mix<br>Archive</div>
-                </div>
-                <div class="cap-item">
-                    <div class="cap-icon-circle">🔬</div>
-                    <div class="cap-label">Mix<br>Digestor</div>
-                </div>
-                <div class="cap-item">
-                    <div class="cap-icon-circle">🛠️</div>
-                    <div class="cap-label">Producer<br>Tools</div>
-                </div>
-                <div class="cap-item">
-                    <div class="cap-icon-circle">📊</div>
-                    <div class="cap-label">Dashboard</div>
-                </div>
+                <div id="archiveStatus5" style="display:none;text-align:center;padding:8px;font-size:0.8rem;"></div>
+                <div id="archiveList5" style="font-size:0.8rem;color:#8A7A5A;">Loading...</div>
             </div>
         </div>
         <div class="step-nav">
-            <button class="nav-btn secondary" onclick="goToStep(2)">Back</button>
+            <button class="nav-btn secondary" onclick="goToStep(4)">Back</button>
             <button class="nav-btn primary" onclick="goToStep(0)">Start Over</button>
         </div>
     </div>
@@ -1097,10 +1281,14 @@ function showNotConfigured(container, modeName) {
 let currentStep = 0;
 let selectedRole = null;
 let selectedMode = null;
-let apiStatus = { azure_openai: false, audd: false, replicate: false };
+let apiStatus = { azure_openai: false, audd: false, replicate: false, spotify: false };
+let userProfile = null;
+let spotifyTracks = [];
+let spotifyPlaylistNames = [];
+let mixUploadedTracks = [];
 const userName = () => document.getElementById('userName').value.trim();
 
-const STEP_LABELS = ['Welcome', 'Profile', 'Mode', 'Experience', 'Overview'];
+const STEP_LABELS = ['Welcome', 'Connect', 'Profile', 'Explore', 'Create', 'Library'];
 
 /* ===== API STATUS CHECK ===== */
 const API_REQUIREMENTS = {
@@ -1129,21 +1317,7 @@ const API_REQUIREMENTS = {
 })();
 
 function updateModeCards() {
-    document.querySelectorAll('.mode-card').forEach(card => {
-        const mode = card.getAttribute('data-mode');
-        const requiredApi = API_REQUIREMENTS[mode];
-        // Remove any existing badge
-        const existing = card.querySelector('.api-badge');
-        if (existing) existing.remove();
-        // If this mode needs an API and it's not configured, add badge
-        if (requiredApi && !apiStatus[requiredApi]) {
-            const badge = document.createElement('div');
-            badge.className = 'api-badge';
-            badge.textContent = 'Keys Required';
-            badge.style.cssText = 'font-size:0.65rem;color:#C41E3A;margin-top:6px;font-weight:700;letter-spacing:0.5px;opacity:0.85;';
-            card.appendChild(badge);
-        }
-    });
+    // Badge system is now static in HTML, no dynamic updates needed
 }
 
 /* ===== SPOTIFY ===== */
@@ -1152,45 +1326,64 @@ const JAW_SPOTIFY = '1228993875';
 const PETER_SPOTIFY = '31j6zvkbdfpegk3qxzyikrlyz57y';
 
 async function connectSpotify() {
-    const btn = document.getElementById('spotifyConnectBtn');
+    const card = document.getElementById('spotifyCard');
     const status = document.getElementById('spotifyStatus');
-    btn.textContent = '⏳ Connecting...';
-    btn.style.opacity = '0.6';
-    btn.disabled = true;
+    if (!card) return;
+    card.style.opacity = '0.6';
+    card.onclick = null;
     try {
-        // Test connection by fetching Peter's playlists
         let res = await fetch(`/api/spotify/user/${JAW_SPOTIFY}/playlists`);
         let profileUsed = 'JAW';
         if (!res.ok) {
-            // Fallback to Peter's profile
             res = await fetch(`/api/spotify/user/${PETER_SPOTIFY}/playlists`);
             profileUsed = 'Peter';
         }
         if (!res.ok) throw new Error('Spotify not configured');
         const data = await res.json();
         spotifyConnected = true;
-        btn.style.background = '#1DB954';
-        btn.style.color = '#fff';
-        btn.style.border = '2px solid #1DB954';
-        btn.innerHTML = '✓ Spotify Connected';
-        btn.onclick = null;
+        card.classList.add('connected');
+        card.style.opacity = '1';
+        card.querySelector('.cc-status').textContent = 'Connected';
+        card.querySelector('.cc-status').style.color = '#1DB954';
         document.getElementById('spotifyLibrary').style.display = 'block';
         document.getElementById('spotifyUserLabel').textContent = `${data.playlists?.length || 0} playlists loaded`;
+        // Store playlist names for profile analysis
+        spotifyPlaylistNames = (data.playlists || []).map(p => p.name);
         renderPlaylists(data.playlists || [], profileUsed);
+        // Auto-load first playlist tracks for profile seeding
+        if (data.playlists && data.playlists.length > 0) {
+            loadPlaylistTracksForProfile(data.playlists[0].id);
+        }
+        enableStep1Continue();
     } catch (e) {
-        btn.textContent = '❌ Connection Failed';
-        btn.style.borderColor = '#C41E3A';
-        btn.style.color = '#C41E3A';
-        status.style.display = 'block';
-        status.innerHTML = '<span style="font-size:0.75rem;color:#C41E3A;">Spotify keys not configured on server. Add SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in Render.</span>';
+        card.style.opacity = '1';
+        card.onclick = function(){ connectSpotify(); };
+        card.querySelector('.cc-status').textContent = 'Connection failed — retry';
+        card.querySelector('.cc-status').style.color = '#C41E3A';
+        if (status) {
+            status.style.display = 'block';
+            status.innerHTML = '<span style="font-size:0.75rem;color:#C41E3A;">Spotify keys not configured on server.</span>';
+        }
         setTimeout(() => {
-            btn.innerHTML = '🎵 Connect Spotify';
-            btn.style.borderColor = '#1DB954';
-            btn.style.color = '#1DB954';
-            btn.style.opacity = '1';
-            btn.disabled = false;
+            card.querySelector('.cc-status').textContent = 'Ready to connect';
+            card.querySelector('.cc-status').style.color = '#22c55e';
+            if (status) status.style.display = 'none';
         }, 3000);
     }
+}
+
+async function loadPlaylistTracksForProfile(playlistId) {
+    try {
+        const res = await fetch(`/api/spotify/playlist/${playlistId}/tracks`);
+        const data = await res.json();
+        spotifyTracks = (data.tracks || []).map(t => ({
+            name: t.title || t.name,
+            artist: t.artist,
+            bpm: t.bpm,
+            key: t.key,
+            energy: t.energy
+        }));
+    } catch (e) { /* silent */ }
 }
 
 function renderPlaylists(playlists, owner) {
@@ -1260,6 +1453,13 @@ async function spotifySearch() {
 
 /* ===== NAVIGATION ===== */
 function goToStep(n) {
+    // Gate: require connection before step 2+
+    if (n >= 2 && !spotifyConnected && mixUploadedTracks.length === 0) {
+        var btn = document.getElementById('step1Next');
+        if (btn) { btn.style.animation = 'none'; btn.offsetHeight; btn.style.animation = ''; }
+        return;
+    }
+
     // Hide current
     document.getElementById('step' + currentStep).classList.remove('active');
     currentStep = n;
@@ -1278,60 +1478,34 @@ function goToStep(n) {
         updateProgress(n);
     }
 
-    // Build experience area if step 3
-    if (n === 3) buildExperience();
+    // Load archive list on step 5
+    if (n === 5) loadArchiveStep5();
 
     // Scroll to top
     window.scrollTo(0, 0);
 }
 
-function updateProgress(active) {
-    document.querySelectorAll('.progress-dot').forEach(dot => {
-        const s = parseInt(dot.dataset.step);
-        dot.classList.remove('active', 'done');
-        if (s === active) dot.classList.add('active');
-        else if (s < active) dot.classList.add('done');
-    });
-    document.querySelectorAll('.progress-line').forEach(line => {
-        const s = parseInt(line.dataset.line);
-        line.classList.toggle('done', s < active);
-    });
-    document.getElementById('progressLabel').textContent = STEP_LABELS[active] || '';
+/* ===== LAUNCH MODE (from Explore/Create grids) ===== */
+function launchMode(mode) {
+    selectedMode = mode;
+    // Determine which experience area to use
+    var area;
+    var exploreArea = document.getElementById('experienceArea');
+    var createArea = document.getElementById('createExperienceArea');
+    var exploreModes = ['jaw', 'discovery', 'events', 'setbuilder', 'digestor', 'dashboard'];
+    if (exploreModes.indexOf(mode) !== -1) {
+        area = exploreArea;
+        if (createArea) createArea.innerHTML = '';
+    } else {
+        area = createArea;
+        if (exploreArea) exploreArea.innerHTML = '';
+    }
+    if (!area) return;
+    buildExperienceInto(area);
+    area.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-/* ===== ROLE SELECTION ===== */
-function selectRole(el) {
-    document.querySelectorAll('.role-card').forEach(c => c.classList.remove('selected'));
-    el.classList.add('selected');
-    selectedRole = el.dataset.role;
-    document.getElementById('step1Next').disabled = false;
-}
-
-/* ===== MODE SELECTION ===== */
-function selectMode(el) {
-    document.querySelectorAll('.mode-card').forEach(c => c.classList.remove('selected'));
-    el.classList.add('selected');
-    selectedMode = el.dataset.mode;
-    document.getElementById('step2Next').disabled = false;
-}
-
-/* ===== EXPERIENCE BUILDERS ===== */
-const MODE_NAMES = {
-    jaw: 'J.A.W. DJ Command',
-    discovery: 'Music Discovery',
-    mastering: 'AI Mastering',
-    stems: 'Stem Separation',
-    generation: 'AI Generation',
-    events: 'Events Radar',
-    setbuilder: 'Set Builder',
-    archive: 'Mix Archive',
-    digestor: 'Mix Digestor',
-    tools: 'Producer Tools',
-    dashboard: 'Dashboard'
-};
-
-function buildExperience() {
-    const area = document.getElementById('experienceArea');
+function buildExperienceInto(area) {
     const name = userName() || 'Producer';
     const modeName = MODE_NAMES[selectedMode] || 'Mode';
 
@@ -1362,6 +1536,53 @@ function buildExperience() {
     } else {
         area.innerHTML = buildDefaultExperience(name, modeName);
     }
+}
+
+function updateProgress(active) {
+    document.querySelectorAll('.progress-dot').forEach(dot => {
+        const s = parseInt(dot.dataset.step);
+        dot.classList.remove('active', 'done');
+        if (s === active) dot.classList.add('active');
+        else if (s < active) dot.classList.add('done');
+    });
+    document.querySelectorAll('.progress-line').forEach(line => {
+        const s = parseInt(line.dataset.line);
+        line.classList.toggle('done', s < active);
+    });
+    document.getElementById('progressLabel').textContent = STEP_LABELS[active] || '';
+}
+
+/* ===== CONNECTION HELPERS ===== */
+function enableStep1Continue() {
+    var btn = document.getElementById('step1Next');
+    if (btn) btn.disabled = false;
+}
+
+/* ===== MODE SELECTION (kept for compatibility) ===== */
+function selectMode(el) {
+    if (el && el.dataset && el.dataset.mode) {
+        selectedMode = el.dataset.mode;
+    }
+}
+
+/* ===== EXPERIENCE BUILDERS ===== */
+const MODE_NAMES = {
+    jaw: 'J.A.W. DJ Command',
+    discovery: 'Music Discovery',
+    mastering: 'AI Mastering',
+    stems: 'Stem Separation',
+    generation: 'AI Generation',
+    events: 'Events Radar',
+    setbuilder: 'Set Builder',
+    archive: 'Mix Archive',
+    digestor: 'Mix Digestor',
+    tools: 'Producer Tools',
+    dashboard: 'Dashboard'
+};
+
+function buildExperience() {
+    var area = document.getElementById('experienceArea');
+    if (area && selectedMode) buildExperienceInto(area);
 }
 
 /* --- JAW DJ Command (Chat) --- */
@@ -2362,6 +2583,208 @@ function sendToolsQuery() {
     })
     .catch(err => {
         result.innerHTML = '<div style="padding:16px;color:#C41E3A;font-size:0.85rem;">Connection error. Try again.</div>';
+    });
+}
+
+/* --- Analyze My Music (Profile) --- */
+async function analyzeMyMusic() {
+    var btn = document.getElementById('analyzeBtn');
+    var status = document.getElementById('analyzeStatus');
+    var msg = document.getElementById('analyzeMsg');
+    var bar = document.getElementById('analyzeBar');
+    var card = document.getElementById('profileCard');
+    if (!btn) return;
+
+    btn.disabled = true;
+    btn.textContent = 'Analyzing...';
+    status.style.display = 'block';
+    msg.textContent = 'Gathering your music data...';
+    bar.style.width = '20%';
+
+    // Build payload from collected Spotify data + mix tracks
+    var allTracks = spotifyTracks.concat(mixUploadedTracks);
+    var payload = {
+        tracks: allTracks.slice(0, 30),
+        playlists: spotifyPlaylistNames,
+        genres: []
+    };
+
+    setTimeout(function(){ msg.textContent = 'Analyzing your taste with AI...'; bar.style.width = '50%'; }, 1000);
+    setTimeout(function(){ msg.textContent = 'Building your profile...'; bar.style.width = '75%'; }, 3000);
+
+    try {
+        var res = await fetch('/api/profile/analyze', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        var data = await res.json();
+        bar.style.width = '100%';
+
+        if (data.error) {
+            msg.textContent = 'Error: ' + data.error;
+            msg.style.color = '#C41E3A';
+            btn.disabled = false;
+            btn.textContent = 'Analyze My Music';
+            return;
+        }
+
+        var profile = data.profile || data;
+        userProfile = profile;
+        status.style.display = 'none';
+        btn.style.display = 'none';
+
+        // Render profile card
+        var genres = (profile.genres || []).map(function(g){ return '<span class="profile-genre-tag">' + g + '</span>'; }).join('');
+        var keys = (profile.key_clusters || []).join(', ');
+        var bpmMin = profile.bpm_range ? profile.bpm_range.min : '?';
+        var bpmMax = profile.bpm_range ? profile.bpm_range.max : '?';
+
+        card.style.display = 'block';
+        card.innerHTML =
+            '<div class="profile-card">' +
+                '<h3>Your Music Profile</h3>' +
+                '<div class="profile-genres">' + genres + '</div>' +
+                '<div class="profile-stat"><span class="ps-label">Energy Level</span><span class="ps-value">' + (profile.energy_level || '—') + '</span></div>' +
+                '<div class="profile-stat"><span class="ps-label">BPM Range</span><span class="ps-value">' + bpmMin + ' – ' + bpmMax + '</span></div>' +
+                '<div class="profile-stat"><span class="ps-label">Key Clusters</span><span class="ps-value">' + (keys || '—') + '</span></div>' +
+                '<div class="profile-stat"><span class="ps-label">Mood</span><span class="ps-value">' + (profile.mood || '—') + '</span></div>' +
+                '<div class="profile-stat"><span class="ps-label">DJ Style</span><span class="ps-value">' + (profile.dj_style || '—') + '</span></div>' +
+            '</div>';
+    } catch (e) {
+        bar.style.width = '100%';
+        msg.textContent = 'Analysis failed. Try again.';
+        msg.style.color = '#C41E3A';
+        btn.disabled = false;
+        btn.textContent = 'Analyze My Music';
+    }
+}
+
+/* --- Upload Mix (Step 1 Connect) --- */
+function uploadMixStep1(input) {
+    var file = input.files[0];
+    if (!file) return;
+    var status = document.getElementById('step1MixStatus');
+    var results = document.getElementById('step1MixResults');
+    status.style.display = 'block';
+    status.innerHTML = '<div style="font-size:0.85rem;color:#D4A017;">Uploading "' + file.name + '" to AudD Digestor...</div>';
+    results.style.display = 'none';
+
+    var formData = new FormData();
+    formData.append('file', file);
+
+    fetch('/api/digestor', { method: 'POST', body: formData })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+        if (data.error) {
+            status.innerHTML = '<div style="font-size:0.85rem;color:#C41E3A;">Error: ' + data.error + '</div>';
+            return;
+        }
+        var tracks = data.tracks || [];
+        mixUploadedTracks = tracks.map(function(t){ return { name: t.title, artist: t.artist }; });
+        status.innerHTML = '<div style="font-size:0.85rem;color:#22c55e;">Found ' + tracks.length + ' tracks in your mix!</div>';
+        if (tracks.length > 0) {
+            results.style.display = 'block';
+            results.innerHTML = tracks.slice(0, 8).map(function(t){
+                return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:0.78rem;">' +
+                    '<span style="color:#D4A017;font-weight:700;">' + (t.timestamp || '') + '</span>' +
+                    '<span style="color:#fff;">' + (t.title || 'Unknown') + '</span>' +
+                    '<span style="color:#8A7A5A;"> — ' + (t.artist || '') + '</span></div>';
+            }).join('');
+        }
+        enableStep1Continue();
+    })
+    .catch(function(err){
+        status.innerHTML = '<div style="font-size:0.85rem;color:#C41E3A;">Upload failed: ' + err.message + '</div>';
+    });
+}
+
+/* --- Upload Mix (Step 5 Library) --- */
+function uploadMixLibrary(input) {
+    var file = input.files[0];
+    if (!file) return;
+    var status = document.getElementById('libraryMixStatus');
+    var results = document.getElementById('libraryMixResults');
+    status.style.display = 'block';
+    status.innerHTML = '<div style="font-size:0.85rem;color:#D4A017;">Running AudD Digestor on "' + file.name + '"...</div>';
+    results.style.display = 'none';
+
+    var formData = new FormData();
+    formData.append('file', file);
+
+    fetch('/api/digestor', { method: 'POST', body: formData })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+        if (data.error) {
+            status.innerHTML = '<div style="font-size:0.85rem;color:#C41E3A;">Error: ' + data.error + '</div>';
+            return;
+        }
+        var tracks = data.tracks || [];
+        status.innerHTML = '<div style="font-size:0.85rem;color:#22c55e;">Found ' + tracks.length + ' tracks!</div>';
+        if (tracks.length > 0) {
+            results.style.display = 'block';
+            results.innerHTML = tracks.map(function(t){
+                return '<div style="display:flex;align-items:center;gap:8px;padding:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:8px;margin-bottom:4px;font-size:0.78rem;">' +
+                    '<span style="color:#D4A017;font-weight:700;min-width:50px;">' + (t.timestamp || '') + '</span>' +
+                    '<span style="color:#fff;flex:1;">' + (t.title || 'Unknown') + ' — <span style="color:#8A7A5A;">' + (t.artist || '') + '</span></span></div>';
+            }).join('');
+        }
+    })
+    .catch(function(err){
+        status.innerHTML = '<div style="font-size:0.85rem;color:#C41E3A;">Upload failed: ' + err.message + '</div>';
+    });
+}
+
+/* --- Archive (Step 5) --- */
+function uploadArchiveStep5(input) {
+    var file = input.files[0];
+    if (!file) return;
+    var status = document.getElementById('archiveStatus5');
+    status.style.display = 'block';
+    status.textContent = 'Uploading "' + file.name + '"...';
+    status.style.color = '#D4A017';
+
+    var formData = new FormData();
+    formData.append('file', file);
+
+    fetch('/api/archive/upload', { method: 'POST', body: formData })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+        if (data.error) {
+            status.textContent = 'Error: ' + data.error;
+            status.style.color = '#C41E3A';
+        } else {
+            status.textContent = 'Archived! ' + data.entry.filename;
+            status.style.color = '#22c55e';
+            loadArchiveStep5();
+        }
+        input.value = '';
+    })
+    .catch(function(err){
+        status.textContent = 'Upload failed: ' + err.message;
+        status.style.color = '#C41E3A';
+    });
+}
+
+function loadArchiveStep5() {
+    var list = document.getElementById('archiveList5');
+    if (!list) return;
+    fetch('/api/archive')
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+        if (!data.mixes || data.mixes.length === 0) {
+            list.innerHTML = '<div style="color:#666;font-size:0.78rem;">No mixes archived yet.</div>';
+            return;
+        }
+        list.innerHTML = data.mixes.map(function(m){
+            return '<div style="display:flex;align-items:center;gap:10px;padding:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;margin-bottom:6px;">' +
+                '<div style="font-size:1rem;">💾</div>' +
+                '<div style="flex:1;"><div style="font-size:0.8rem;color:#fff;">' + m.filename + '</div>' +
+                '<div style="font-size:0.65rem;color:#8A7A5A;">' + m.size_mb + ' MB &bull; ' + m.uploaded_at + '</div></div></div>';
+        }).join('');
+    })
+    .catch(function(){
+        list.innerHTML = '<div style="color:#C41E3A;font-size:0.78rem;">Failed to load archive.</div>';
     });
 }
 

@@ -808,6 +808,52 @@ async def spotify_playlist_tracks(playlist_id: str, limit: int = 50):
     return {"tracks": tracks, "total": len(tracks)}
 
 
+# ── Music Profile Analysis ────────────────────────────────────────────────────
+
+@app.post("/api/profile/analyze")
+async def analyze_profile(payload: dict):
+    """Analyze user's Spotify data to generate a taste profile using Azure OpenAI."""
+    client = get_ai_client()
+    if not client:
+        return JSONResponse({"error": "Azure OpenAI not configured"}, status_code=503)
+
+    model = get_secret("AZURE_OPENAI_MODEL", "gpt-4o")
+    tracks = payload.get("tracks", [])
+    playlists = payload.get("playlists", [])
+    genres = payload.get("genres", [])
+
+    user_data = json.dumps({
+        "top_tracks": tracks[:30],
+        "playlist_names": playlists[:20],
+        "genres": genres[:20],
+    }, indent=2)
+
+    system_prompt = (
+        "You are a music taste analyst for Simple Balance Music. Given a user's listening data, "
+        "generate a taste profile. Return ONLY valid JSON with this exact structure:\n"
+        '{"genres": ["top 5 genres"], "energy_level": "high/medium/low", '
+        '"bpm_range": {"min": number, "max": number}, '
+        '"key_clusters": ["top 3 musical keys"], '
+        '"mood": "short mood description", '
+        '"dj_style": "short DJ style description"}'
+    )
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Analyze this listener's music data and generate their taste profile:\n{user_data}"},
+            ],
+            temperature=0.4,
+            response_format={"type": "json_object"},
+        )
+        result = json.loads(response.choices[0].message.content)
+        return {"profile": result}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 # ── API Status ────────────────────────────────────────────────────────────────
 
 @app.get("/api/status")
