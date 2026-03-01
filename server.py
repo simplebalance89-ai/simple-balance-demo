@@ -629,47 +629,279 @@ async def spotify_search(q: str, type: str = "track", limit: int = 10):
 @app.get("/api/spotify/recommendations")
 async def spotify_recommendations(seed_genres: str = "", seed_artists: str = "", seed_tracks: str = "",
                                    target_bpm: int = 0, limit: int = 10):
-    """Get Spotify recommendations based on seeds."""
-    token = await get_spotify_token()
-    if not token:
-        return JSONResponse({"error": "Spotify not configured"}, status_code=503)
+    """Recommendations via AI engine (Spotify recommendations API deprecated). Delegates to /api/recommendations."""
+    genre = seed_genres.replace(",", " ") if seed_genres else ""
+    artist = seed_artists if seed_artists else ""
+    return await ai_recommendations(genre=genre, mood="", artist=artist, bpm=target_bpm, limit=limit)
 
-    params = {"limit": limit}
-    if seed_genres:
-        params["seed_genres"] = seed_genres
-    if seed_artists:
-        params["seed_artists"] = seed_artists
-    if seed_tracks:
-        params["seed_tracks"] = seed_tracks
-    if target_bpm:
-        params["target_tempo"] = target_bpm
 
-    if not any(k.startswith("seed_") for k in params):
-        params["seed_genres"] = "electronic"
+# ── Tidal (Client Credentials) ──────────────────────────────────────────────
 
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            "https://api.spotify.com/v1/recommendations",
-            headers={"Authorization": f"Bearer {token}"},
-            params=params,
+_tidal_token = {"access_token": None, "expires_at": datetime.min}
+
+
+async def get_tidal_token():
+    """Get a Tidal access token using Client Credentials flow. Caches until expiry."""
+    global _tidal_token
+    if _tidal_token["access_token"] and datetime.now() < _tidal_token["expires_at"]:
+        return _tidal_token["access_token"]
+
+    client_id = get_secret("TIDAL_CLIENT_ID")
+    client_secret = get_secret("TIDAL_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        return None
+
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                "https://auth.tidal.com/v1/oauth2/token",
+                data={
+                    "grant_type": "client_credentials",
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            _tidal_token["access_token"] = data["access_token"]
+            _tidal_token["expires_at"] = datetime.now() + timedelta(seconds=data.get("expires_in", 86400) - 60)
+            return _tidal_token["access_token"]
+    except Exception:
+        return None
+
+
+async def tidal_search_tracks(http, token, query, limit=3, country="US"):
+    """Search Tidal for tracks. Returns list of simplified track objects."""
+    try:
+        resp = await http.get(
+            "https://openapi.tidal.com/search",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/vnd.tidal.v1+json",
+            },
+            params={"query": query, "type": "TRACKS", "limit": limit, "countryCode": country},
         )
-        resp.raise_for_status()
+        if resp.status_code != 200:
+            return []
         data = resp.json()
+        items = data.get("tracks", [])
+        if isinstance(items, dict):
+            items = items.get("items", [])
+        results = []
+        for item in items:
+            resource = item.get("resource", item)
+            artists = ", ".join(a.get("name", "") for a in resource.get("artists", []))
+            cover = None
+            if resource.get("imageCover"):
+                covers = resource["imageCover"]
+                if isinstance(covers, list) and covers:
+                    cover = covers[0].get("url")
+            results.append({
+                "id": resource.get("id"),
+                "title": resource.get("title", ""),
+                "artist": artists,
+                "url": f"https://tidal.com/track/{resource.get('id', '')}",
+                "album_art": cover,
+            })
+        return results
+    except Exception:
+        return []
 
-    tracks = []
-    for t in data.get("tracks", []):
-        artists = ", ".join(a["name"] for a in t.get("artists", []))
-        album = t.get("album", {})
-        images = album.get("images", [])
-        tracks.append({
-            "title": t["name"],
-            "artist": artists,
-            "spotify_url": t.get("external_urls", {}).get("spotify"),
-            "album_art": images[0]["url"] if images else None,
-            "preview_url": t.get("preview_url"),
-            "spotify_id": t["id"],
-        })
-    return {"tracks": tracks}
+
+@app.get("/api/tidal/search")
+async def tidal_search(q: str, limit: int = 10, countryCode: str = "US"):
+    """Search Tidal catalog for tracks."""
+    token = await get_tidal_token()
+    if not token:
+        return JSONResponse({"error": "Tidal not configured"}, status_code=503)
+
+    async with httpx.AsyncClient(timeout=15) as http:
+        results = await tidal_search_tracks(http, token, q, limit, countryCode)
+    return {"tracks": results}
+
+
+# ── AI-Powered Recommendations (Spotify + Tidal) ────────────────────────────
+
+@app.get("/api/recommendations")
+async def ai_recommendations(genre: str = "", mood: str = "", artist: str = "",
+                              bpm: int = 0, limit: int = 10):
+    """AI-powered music recommendations with Spotify + Tidal delivery."""
+    client = get_ai_client()
+    if not client:
+        return JSONResponse({"error": "Azure OpenAI not configured"}, status_code=503)
+
+    model = get_secret("AZURE_OPENAI_MODEL", "gpt-4o")
+
+    context_parts = []
+    if genre:
+        context_parts.append(f"Genre: {genre}")
+    if mood:
+        context_parts.append(f"Mood: {mood}")
+    if artist:
+        context_parts.append(f"Similar to: {artist}")
+    if bpm:
+        context_parts.append(f"Target BPM: {bpm}")
+    if not context_parts:
+        context_parts.append("Genre: electronic")
+
+    context = ", ".join(context_parts)
+
+    system_prompt = (
+        "You are a music recommendation engine for Simple Balance Music, a DJ/producer platform. "
+        f"Given preferences, recommend exactly {limit} specific, real tracks. "
+        "Return ONLY valid JSON: {\"tracks\": [{\"title\": \"...\", \"artist\": \"...\", \"bpm\": number, \"key\": \"...\", \"reason\": \"...\"}]}. "
+        "Focus on electronic, house, techno, and adjacent genres. Use real, existing tracks only."
+    )
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Recommend tracks for: {context}"},
+            ],
+            temperature=0.7,
+            response_format={"type": "json_object"},
+        )
+        content = response.choices[0].message.content
+        ai_tracks = json.loads(content)
+        if isinstance(ai_tracks, dict):
+            ai_tracks = ai_tracks.get("tracks", ai_tracks.get("recommendations", []))
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+    # Enrich with Spotify + Tidal links
+    spotify_token = await get_spotify_token()
+    tidal_token = await get_tidal_token()
+    enriched = []
+
+    async with httpx.AsyncClient(timeout=15) as http:
+        for track in ai_tracks[:limit]:
+            query = f"{track.get('title', '')} {track.get('artist', '')}"
+            entry = {
+                "title": track.get("title", "Unknown"),
+                "artist": track.get("artist", "Unknown"),
+                "bpm": track.get("bpm"),
+                "key": track.get("key"),
+                "reason": track.get("reason", ""),
+                "spotify": None,
+                "tidal": None,
+            }
+
+            # Spotify search
+            if spotify_token:
+                try:
+                    resp = await http.get(
+                        "https://api.spotify.com/v1/search",
+                        headers={"Authorization": f"Bearer {spotify_token}"},
+                        params={"q": query, "type": "track", "limit": 1},
+                    )
+                    if resp.status_code == 200:
+                        items = resp.json().get("tracks", {}).get("items", [])
+                        if items:
+                            t = items[0]
+                            images = t.get("album", {}).get("images", [])
+                            entry["spotify"] = {
+                                "url": t.get("external_urls", {}).get("spotify"),
+                                "id": t["id"],
+                                "preview_url": t.get("preview_url"),
+                                "album_art": images[0]["url"] if images else None,
+                            }
+                except Exception:
+                    pass
+
+            # Tidal search
+            if tidal_token:
+                tidal_results = await tidal_search_tracks(http, tidal_token, query, limit=1)
+                if tidal_results:
+                    entry["tidal"] = tidal_results[0]
+
+            enriched.append(entry)
+
+    return {
+        "tracks": enriched,
+        "source": "ai",
+        "platforms": {"spotify": bool(spotify_token), "tidal": bool(tidal_token)},
+    }
+
+
+# ── Manual Profile Builder ──────────────────────────────────────────────────
+
+@app.post("/api/profile/build")
+async def build_profile(payload: dict):
+    """Build a taste profile from manually entered favorites. No streaming account needed."""
+    client = get_ai_client()
+    if not client:
+        return JSONResponse({"error": "Azure OpenAI not configured"}, status_code=503)
+
+    model = get_secret("AZURE_OPENAI_MODEL", "gpt-4o")
+    favorites = payload.get("favorites", [])
+
+    if len(favorites) < 3:
+        return JSONResponse({"error": "Add at least 3 favorites"}, status_code=400)
+
+    favorites_text = json.dumps(favorites[:20], indent=2)
+
+    system_prompt = (
+        "You are a music taste analyst for Simple Balance Music. Given a list of favorite songs/artists, "
+        "analyze the user's taste and generate a profile with 10 track recommendations. "
+        "Return ONLY valid JSON:\n"
+        '{"profile": {"genres": ["top 5 genres"], "energy_level": "high/medium/low", '
+        '"bpm_range": {"min": number, "max": number}, '
+        '"key_clusters": ["top 3 musical keys"], '
+        '"mood": "short mood description", '
+        '"dj_style": "short DJ style description"}, '
+        '"recommendations": [{"title": "...", "artist": "...", "bpm": number, "key": "...", "reason": "..."}]}'
+    )
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Build a taste profile from these favorites:\n{favorites_text}"},
+            ],
+            temperature=0.5,
+            response_format={"type": "json_object"},
+        )
+        result = json.loads(response.choices[0].message.content)
+
+        # Enrich recommendations with Spotify + Tidal links
+        recs = result.get("recommendations", [])
+        spotify_token = await get_spotify_token()
+        tidal_token = await get_tidal_token()
+
+        if recs and (spotify_token or tidal_token):
+            async with httpx.AsyncClient(timeout=15) as http:
+                for rec in recs:
+                    query = f"{rec.get('title', '')} {rec.get('artist', '')}"
+                    if spotify_token:
+                        try:
+                            resp = await http.get(
+                                "https://api.spotify.com/v1/search",
+                                headers={"Authorization": f"Bearer {spotify_token}"},
+                                params={"q": query, "type": "track", "limit": 1},
+                            )
+                            if resp.status_code == 200:
+                                items = resp.json().get("tracks", {}).get("items", [])
+                                if items:
+                                    t = items[0]
+                                    images = t.get("album", {}).get("images", [])
+                                    rec["spotify"] = {
+                                        "url": t.get("external_urls", {}).get("spotify"),
+                                        "album_art": images[0]["url"] if images else None,
+                                        "preview_url": t.get("preview_url"),
+                                    }
+                        except Exception:
+                            pass
+                    if tidal_token:
+                        tidal_results = await tidal_search_tracks(http, tidal_token, query, limit=1)
+                        if tidal_results:
+                            rec["tidal"] = tidal_results[0]
+
+        return result
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @app.get("/api/spotify/audio-features/{track_id}")
@@ -863,6 +1095,7 @@ async def api_status():
         "audd": bool(get_secret("AUDD_API_TOKEN")),
         "replicate": bool(get_secret("REPLICATE_API_TOKEN")),
         "spotify": bool(get_secret("SPOTIFY_CLIENT_ID") and get_secret("SPOTIFY_CLIENT_SECRET")),
+        "tidal": bool(get_secret("TIDAL_CLIENT_ID") and get_secret("TIDAL_CLIENT_SECRET")),
     }
 
 

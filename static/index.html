@@ -1037,11 +1037,11 @@
                 <div class="cc-name"><span class="status-badge badge-green"></span>Spotify</div>
                 <div class="cc-status" style="color:#22c55e;">Ready to connect</div>
             </div>
-            <!-- Tidal — AMBER (code exists, needs testing) -->
-            <div class="connect-card" style="border-color:rgba(245,158,11,0.3);">
+            <!-- Tidal — GREEN (functional) -->
+            <div class="connect-card" id="tidalCard" onclick="connectTidal()">
                 <div class="cc-icon">🌊</div>
-                <div class="cc-name"><span class="status-badge badge-amber"></span>Tidal</div>
-                <div class="cc-status" style="color:#f59e0b;">Coming soon</div>
+                <div class="cc-name"><span class="status-badge badge-green"></span>Tidal</div>
+                <div class="cc-status" style="color:#22c55e;">Ready to connect</div>
             </div>
             <!-- Apple Music — GRAY/TBD -->
             <div class="connect-card disabled">
@@ -1068,6 +1068,12 @@
                 <div class="cc-status" style="color:#22c55e;">AudD Digestor</div>
                 <input type="file" id="step1MixFile" accept="audio/*" style="display:none" onchange="uploadMixStep1(this)">
             </div>
+            <!-- Build Profile (manual) -->
+            <div class="connect-card" id="buildProfileCard" onclick="showBuildProfile()" style="border-color:rgba(212,160,23,0.3);">
+                <div class="cc-icon">🎯</div>
+                <div class="cc-name"><span class="status-badge badge-green"></span>Build Profile</div>
+                <div class="cc-status" style="color:#22c55e;">Add 10 favorites</div>
+            </div>
         </div>
         <!-- Spotify Library Panel (hidden until connected) -->
         <div id="spotifyLibrary" style="display:none;margin-top:20px;width:100%;max-width:500px;">
@@ -1085,6 +1091,34 @@
             </div>
         </div>
         <div id="spotifyStatus" style="display:none;"></div>
+        <!-- Tidal Library Panel (hidden until connected) -->
+        <div id="tidalLibrary" style="display:none;margin-top:16px;width:100%;max-width:500px;">
+            <div style="background:rgba(0,255,255,0.06);border:1px solid rgba(0,255,255,0.2);border-radius:12px;padding:16px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                    <span style="font-family:'Playfair Display',serif;font-size:1rem;color:#00FFFF;">Tidal Connected</span>
+                </div>
+                <div style="display:flex;gap:8px;margin-bottom:12px;">
+                    <input type="text" id="tidalSearchInput" placeholder="Search tracks on Tidal..." style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid #333;background:#1a1a2e;color:#fff;font-family:'Nunito',sans-serif;font-size:0.8rem;" onkeydown="if(event.key==='Enter')tidalSearch()">
+                    <button onclick="tidalSearch()" style="padding:8px 16px;border-radius:8px;border:none;background:#00BFFF;color:#000;font-weight:700;cursor:pointer;font-size:0.8rem;">Search</button>
+                </div>
+                <div id="tidalResults" style="max-height:250px;overflow-y:auto;"></div>
+            </div>
+        </div>
+        <!-- Build Profile Panel (hidden until clicked) -->
+        <div id="buildProfilePanel" style="display:none;margin-top:16px;width:100%;max-width:500px;">
+            <div style="background:rgba(212,160,23,0.08);border:1px solid rgba(212,160,23,0.25);border-radius:12px;padding:16px;">
+                <div style="font-family:'Playfair Display',serif;font-size:1rem;color:#FFE082;margin-bottom:4px;">Build Your Profile</div>
+                <div style="font-size:0.7rem;color:#8A7A5A;margin-bottom:12px;">Add your favorite songs or artists. We'll analyze your taste and recommend tracks from Spotify + Tidal.</div>
+                <div id="favoritesInputs"></div>
+                <button onclick="addFavoriteInput()" style="width:100%;padding:8px;border-radius:8px;border:1px dashed rgba(212,160,23,0.3);background:transparent;color:#D4A017;cursor:pointer;font-size:0.8rem;margin-bottom:12px;">+ Add another</button>
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <span id="favCount" style="font-size:0.7rem;color:#8A7A5A;">0 / 10</span>
+                    <button id="buildProfileBtn" onclick="buildProfile()" style="padding:10px 24px;border-radius:8px;border:none;background:#D4A017;color:#0D0D1A;font-weight:700;cursor:pointer;font-size:0.85rem;">Build Profile</button>
+                </div>
+                <div id="buildProfileStatus" style="display:none;margin-top:12px;text-align:center;"></div>
+                <div id="buildProfileResults" style="display:none;margin-top:12px;"></div>
+            </div>
+        </div>
         <!-- Mix upload status -->
         <div id="step1MixStatus" style="display:none;margin-top:16px;width:100%;max-width:500px;text-align:center;"></div>
         <div id="step1MixResults" style="display:none;margin-top:12px;width:100%;max-width:500px;"></div>
@@ -1283,11 +1317,13 @@ function showNotConfigured(container, modeName) {
 let currentStep = 0;
 let selectedRole = null;
 let selectedMode = null;
-let apiStatus = { azure_openai: false, audd: false, replicate: false, spotify: false };
+let apiStatus = { azure_openai: false, audd: false, replicate: false, spotify: false, tidal: false };
 let userProfile = null;
 let spotifyTracks = [];
 let spotifyPlaylistNames = [];
+let tidalConnected = false;
 let mixUploadedTracks = [];
+let profileFavorites = [];
 const userName = () => document.getElementById('userName').value.trim();
 
 const STEP_LABELS = ['Welcome', 'Connect', 'Profile', 'Explore', 'Create', 'Library'];
@@ -1453,10 +1489,181 @@ async function spotifySearch() {
     }
 }
 
+/* ===== TIDAL CONNECT ===== */
+async function connectTidal() {
+    const card = document.getElementById('tidalCard');
+    if (!card) return;
+    card.style.opacity = '0.6';
+    card.onclick = null;
+    try {
+        const res = await fetch('/api/tidal/search?q=electronic&limit=1');
+        if (!res.ok) throw new Error('Tidal not configured');
+        tidalConnected = true;
+        card.classList.add('connected');
+        card.style.opacity = '1';
+        card.querySelector('.cc-status').textContent = 'Connected';
+        card.querySelector('.cc-status').style.color = '#00FFFF';
+        document.getElementById('tidalLibrary').style.display = 'block';
+        enableStep1Continue();
+    } catch (e) {
+        card.style.opacity = '1';
+        card.onclick = function(){ connectTidal(); };
+        card.querySelector('.cc-status').textContent = 'Connection failed — retry';
+        card.querySelector('.cc-status').style.color = '#C41E3A';
+        setTimeout(() => {
+            card.querySelector('.cc-status').textContent = 'Ready to connect';
+            card.querySelector('.cc-status').style.color = '#22c55e';
+        }, 3000);
+    }
+}
+
+async function tidalSearch() {
+    const query = document.getElementById('tidalSearchInput').value.trim();
+    if (!query) return;
+    const results = document.getElementById('tidalResults');
+    results.innerHTML = '<div style="text-align:center;padding:12px;color:#888;font-size:0.8rem;">Searching Tidal...</div>';
+    try {
+        const res = await fetch(`/api/tidal/search?q=${encodeURIComponent(query)}&limit=10`);
+        const data = await res.json();
+        const tracks = data.tracks || [];
+        results.innerHTML = `<div style="font-size:0.7rem;color:#00BFFF;margin:4px 0 8px;text-transform:uppercase;letter-spacing:1px;">Tidal results for "${query}"</div>`;
+        if (!tracks.length) { results.innerHTML += '<div style="color:#666;font-size:0.8rem;padding:8px;">No results found</div>'; return; }
+        tracks.forEach(t => {
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;font-size:0.78rem;';
+            const art = t.album_art ? `<img src="${t.album_art}" style="width:28px;height:28px;border-radius:3px;">` : '<div style="width:28px;height:28px;border-radius:3px;background:#1a2a3a;display:flex;align-items:center;justify-content:center;font-size:0.7rem;">🌊</div>';
+            const link = t.url ? `<a href="${t.url}" target="_blank" style="color:#00BFFF;font-size:0.65rem;text-decoration:none;">Open</a>` : '';
+            row.innerHTML = `${art}<div style="flex:1;min-width:0;"><div style="color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.title}</div><div style="font-size:0.65rem;color:#666;">${t.artist}</div></div>${link}`;
+            results.appendChild(row);
+        });
+    } catch (e) {
+        results.innerHTML = '<div style="text-align:center;padding:12px;color:#C41E3A;font-size:0.8rem;">Tidal search failed</div>';
+    }
+}
+
+/* ===== BUILD PROFILE (Manual) ===== */
+function showBuildProfile() {
+    const panel = document.getElementById('buildProfilePanel');
+    const card = document.getElementById('buildProfileCard');
+    if (panel.style.display === 'none') {
+        panel.style.display = 'block';
+        card.classList.add('connected');
+        // Seed with 3 initial inputs
+        const inputs = document.getElementById('favoritesInputs');
+        inputs.innerHTML = '';
+        profileFavorites = [];
+        for (let i = 0; i < 3; i++) addFavoriteInput();
+    } else {
+        panel.style.display = 'none';
+        card.classList.remove('connected');
+    }
+}
+
+function addFavoriteInput() {
+    const container = document.getElementById('favoritesInputs');
+    const count = container.children.length;
+    if (count >= 10) return;
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:6px;margin-bottom:6px;';
+    row.innerHTML = `
+        <input type="text" placeholder="Song or artist name" style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid #333;background:#1a1a2e;color:#fff;font-family:'Nunito',sans-serif;font-size:0.8rem;" oninput="updateFavCount()">
+        <button onclick="this.parentElement.remove();updateFavCount()" style="padding:4px 10px;border-radius:8px;border:1px solid #333;background:transparent;color:#666;cursor:pointer;font-size:0.8rem;">&times;</button>`;
+    container.appendChild(row);
+    updateFavCount();
+}
+
+function updateFavCount() {
+    const inputs = document.querySelectorAll('#favoritesInputs input');
+    const filled = Array.from(inputs).filter(i => i.value.trim()).length;
+    document.getElementById('favCount').textContent = `${filled} / 10`;
+    document.getElementById('buildProfileBtn').disabled = filled < 3;
+}
+
+async function buildProfile() {
+    const inputs = document.querySelectorAll('#favoritesInputs input');
+    const favorites = Array.from(inputs).map(i => i.value.trim()).filter(Boolean);
+    if (favorites.length < 3) return;
+
+    const btn = document.getElementById('buildProfileBtn');
+    const status = document.getElementById('buildProfileStatus');
+    const results = document.getElementById('buildProfileResults');
+    btn.disabled = true;
+    btn.textContent = 'Analyzing...';
+    status.style.display = 'block';
+    status.innerHTML = '<div style="font-size:0.85rem;color:#D4A017;">Building your taste profile...</div><div style="width:100%;height:4px;background:rgba(255,255,255,0.06);border-radius:2px;margin-top:8px;overflow:hidden;"><div id="buildBar" style="width:20%;height:100%;background:linear-gradient(90deg,#D4A017,#FFE082);border-radius:2px;transition:width 0.5s ease;"></div></div>';
+
+    setTimeout(() => { const b = document.getElementById('buildBar'); if(b) b.style.width = '50%'; }, 1500);
+    setTimeout(() => { const b = document.getElementById('buildBar'); if(b) b.style.width = '75%'; }, 4000);
+
+    try {
+        const res = await fetch('/api/profile/build', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ favorites: favorites })
+        });
+        const data = await res.json();
+        const b = document.getElementById('buildBar');
+        if(b) b.style.width = '100%';
+
+        if (data.error) {
+            status.innerHTML = `<div style="color:#C41E3A;font-size:0.85rem;">${data.error}</div>`;
+            btn.disabled = false; btn.textContent = 'Build Profile'; return;
+        }
+
+        const profile = data.profile || {};
+        userProfile = profile;
+        status.style.display = 'none';
+        results.style.display = 'block';
+
+        const genres = (profile.genres || []).map(g => `<span class="profile-genre-tag">${g}</span>`).join('');
+        const bpmMin = profile.bpm_range ? profile.bpm_range.min : '?';
+        const bpmMax = profile.bpm_range ? profile.bpm_range.max : '?';
+        const keys = (profile.key_clusters || []).join(', ');
+
+        let recsHtml = '';
+        const recs = data.recommendations || [];
+        if (recs.length) {
+            recsHtml = '<div style="font-family:Playfair Display,serif;font-size:0.9rem;color:#FFE082;margin:16px 0 10px;">Recommended For You</div>';
+            recs.forEach(r => {
+                const platforms = [];
+                if (r.spotify && r.spotify.url) platforms.push(`<a href="${r.spotify.url}" target="_blank" style="color:#1DB954;font-size:0.65rem;text-decoration:none;">Spotify</a>`);
+                if (r.tidal && r.tidal.url) platforms.push(`<a href="${r.tidal.url}" target="_blank" style="color:#00BFFF;font-size:0.65rem;text-decoration:none;">Tidal</a>`);
+                const art = (r.spotify && r.spotify.album_art) ? `<img src="${r.spotify.album_art}" style="width:36px;height:36px;border-radius:4px;">` : '<div style="width:36px;height:36px;border-radius:4px;background:#222;display:flex;align-items:center;justify-content:center;">🎵</div>';
+                recsHtml += `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
+                    ${art}
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:0.82rem;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.title}</div>
+                        <div style="font-size:0.65rem;color:#8A7A5A;">${r.artist}${r.bpm ? ' · ' + r.bpm + ' BPM' : ''}${r.key ? ' · ' + r.key : ''}</div>
+                        ${r.reason ? `<div style="font-size:0.6rem;color:#6A6A7A;font-style:italic;">${r.reason}</div>` : ''}
+                    </div>
+                    <div style="display:flex;gap:6px;">${platforms.join('')}</div>
+                </div>`;
+            });
+        }
+
+        results.innerHTML = `
+            <div class="profile-card">
+                <h3>Your Music Profile</h3>
+                <div class="profile-genres">${genres}</div>
+                <div class="profile-stat"><span class="ps-label">Energy Level</span><span class="ps-value">${profile.energy_level || '—'}</span></div>
+                <div class="profile-stat"><span class="ps-label">BPM Range</span><span class="ps-value">${bpmMin} – ${bpmMax}</span></div>
+                <div class="profile-stat"><span class="ps-label">Key Clusters</span><span class="ps-value">${keys || '—'}</span></div>
+                <div class="profile-stat"><span class="ps-label">Mood</span><span class="ps-value">${profile.mood || '—'}</span></div>
+                <div class="profile-stat"><span class="ps-label">DJ Style</span><span class="ps-value">${profile.dj_style || '—'}</span></div>
+            </div>
+            ${recsHtml}`;
+
+        enableStep1Continue();
+    } catch (e) {
+        status.innerHTML = '<div style="color:#C41E3A;font-size:0.85rem;">Profile build failed. Try again.</div>';
+        btn.disabled = false; btn.textContent = 'Build Profile';
+    }
+}
+
 /* ===== NAVIGATION ===== */
 function goToStep(n) {
     // Gate: require connection before step 2+
-    if (n >= 2 && !spotifyConnected && mixUploadedTracks.length === 0) {
+    if (n >= 2 && !spotifyConnected && !tidalConnected && mixUploadedTracks.length === 0 && !userProfile) {
         var btn = document.getElementById('step1Next');
         if (btn) { btn.style.animation = 'none'; btn.offsetHeight; btn.style.animation = ''; }
         return;
@@ -1827,25 +2034,31 @@ function showMoodTracks(btn, mood) {
     document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     const container = document.getElementById('trackResults');
-    container.innerHTML = '<div style="text-align:center;padding:20px;color:#D4A017;font-size:0.85rem;">Asking the AI...</div>';
+    container.innerHTML = '<div style="text-align:center;padding:20px;color:#D4A017;font-size:0.85rem;">AI is curating tracks + finding links on Spotify & Tidal...</div>';
     container.classList.add('visible');
 
-    fetch('/api/discovery', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({mood: mood})
-    })
+    // Use the new AI recommendations endpoint (includes Spotify + Tidal links)
+    fetch(`/api/recommendations?mood=${encodeURIComponent(mood)}&limit=8`)
     .then(r => r.json())
     .then(data => {
         if (data.tracks && data.tracks.length > 0) {
             renderDiscoveryTracks(container, data.tracks, true);
         } else {
-            // Fallback to static data
-            renderDiscoveryTracks(container, MOOD_TRACKS[mood] || [], false);
+            // Fallback to old discovery endpoint
+            return fetch('/api/discovery', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({mood: mood})
+            }).then(r => r.json()).then(d => {
+                if (d.tracks && d.tracks.length > 0) {
+                    renderDiscoveryTracks(container, d.tracks, true);
+                } else {
+                    renderDiscoveryTracks(container, MOOD_TRACKS[mood] || [], false);
+                }
+            });
         }
     })
     .catch(() => {
-        // Fallback to static data on any error
         renderDiscoveryTracks(container, MOOD_TRACKS[mood] || [], false);
     });
 }
@@ -1854,20 +2067,25 @@ function renderDiscoveryTracks(container, tracks, isAI) {
     const badge = isAI
         ? '<div style="text-align:center;margin-bottom:12px;"><span style="font-size:0.6rem;background:rgba(212,160,23,0.15);color:#D4A017;padding:4px 10px;border-radius:8px;letter-spacing:1px;text-transform:uppercase;">AI Generated</span></div>'
         : '';
-    container.innerHTML = badge + tracks.map((t, i) => `
-        <div class="track-card">
-            <div class="track-art">${MOOD_EMOJIS[i % MOOD_EMOJIS.length]}</div>
+    container.innerHTML = badge + tracks.map((t, i) => {
+        const platforms = [];
+        if (t.spotify && t.spotify.url) platforms.push(`<a href="${t.spotify.url}" target="_blank" style="color:#1DB954;font-size:0.6rem;text-decoration:none;background:rgba(29,185,84,0.15);padding:2px 6px;border-radius:4px;">Spotify</a>`);
+        if (t.tidal && t.tidal.url) platforms.push(`<a href="${t.tidal.url}" target="_blank" style="color:#00BFFF;font-size:0.6rem;text-decoration:none;background:rgba(0,191,255,0.1);padding:2px 6px;border-radius:4px;">Tidal</a>`);
+        const art = (t.spotify && t.spotify.album_art) ? `<img src="${t.spotify.album_art}" style="width:40px;height:40px;border-radius:6px;">` : `<div class="track-art">${MOOD_EMOJIS[i % MOOD_EMOJIS.length]}</div>`;
+        return `<div class="track-card">
+            ${art}
             <div class="track-info">
                 <div class="ti-name">${t.title || t.name || 'Unknown'}</div>
                 <div class="ti-artist">${t.artist || 'Unknown'}</div>
                 ${t.reason ? `<div style="font-size:0.65rem;color:#8A7A5A;margin-top:2px;font-style:italic;">${t.reason}</div>` : ''}
+                ${platforms.length ? `<div style="display:flex;gap:4px;margin-top:3px;">${platforms.join('')}</div>` : ''}
             </div>
             <div class="track-meta">
                 <div class="tm-bpm">${t.bpm || '?'} BPM</div>
                 <div>${t.key || '?'}</div>
             </div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
     container.classList.add('visible');
 }
 
