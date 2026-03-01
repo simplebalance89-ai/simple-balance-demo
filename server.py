@@ -18,6 +18,25 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Simple Balance Music")
 
+# ── YouTube Cookies (decoded from env var at startup) ─────────────────────────
+COOKIES_PATH = "/tmp/yt_cookies.txt"
+
+def _init_youtube_cookies():
+    """Decode base64 YOUTUBE_COOKIES env var to a file for yt-dlp."""
+    import base64
+    raw = os.environ.get("YOUTUBE_COOKIES", "")
+    if not raw:
+        return
+    try:
+        decoded = base64.b64decode(raw)
+        with open(COOKIES_PATH, "wb") as f:
+            f.write(decoded)
+        logger.info("YouTube cookies written to %s (%d bytes)", COOKIES_PATH, len(decoded))
+    except Exception as e:
+        logger.error("Failed to decode YOUTUBE_COOKIES: %s", e)
+
+_init_youtube_cookies()
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -111,22 +130,30 @@ Be concise, practical, and music-first. Every recommendation should be mixable a
 
 # ── URL Audio Extraction ──────────────────────────────────────────────────────
 
+def _yt_dlp_base_args():
+    """Common yt-dlp args. Adds --cookies if YouTube cookies file exists."""
+    args = ["yt-dlp"]
+    if os.path.isfile(COOKIES_PATH):
+        args += ["--cookies", COOKIES_PATH]
+    return args
+
+
 def extract_audio_url(url: str) -> dict:
     """Use yt-dlp to extract a direct audio stream URL from YouTube/SoundCloud/Mixcloud.
     Returns dict with audio_url, title, uploader, duration, thumbnail or error."""
     try:
+        cmd = _yt_dlp_base_args() + [
+            "--no-download",
+            "--print-json",
+            "-f", "bestaudio/best",
+            "--no-playlist",
+            "--no-warnings",
+            "--extractor-args", "youtube:player_client=android",
+            "--geo-bypass",
+            url,
+        ]
         result = subprocess.run(
-            [
-                "yt-dlp",
-                "--no-download",
-                "--print-json",
-                "-f", "bestaudio/best",
-                "--no-playlist",
-                "--no-warnings",
-                "--extractor-args", "youtube:player_client=android",
-                "--geo-bypass",
-                url,
-            ],
+            cmd,
             capture_output=True,
             text=True,
             timeout=30,
@@ -430,15 +457,19 @@ _digest_jobs = {}  # {job_id: {status, metadata, result, error, started_at}}
 
 async def _run_digest_job(job_id: str, url: str):
     """Background coroutine. Strategy:
-    1. YouTube → try description tracklist (instant, free)
-    2. Fallback → yt-dlp download + AudD fingerprint (works for SC/MC)"""
+    1. YouTube with description tracklist → instant free result
+    2. YouTube with cookies configured → yt-dlp + AudD fingerprint
+    3. YouTube without cookies → error with guidance
+    4. SoundCloud/Mixcloud → yt-dlp + AudD directly"""
     job = _digest_jobs[job_id]
     token = get_secret("AUDD_API_TOKEN")
     tmp_path = None
+    is_youtube = bool(_extract_youtube_id(url))
+    has_cookies = os.path.isfile(COOKIES_PATH)
 
     try:
-        # Strategy 1: YouTube description tracklist (fast path)
-        if _extract_youtube_id(url):
+        # Strategy 1: YouTube description tracklist (fast path — free bonus)
+        if is_youtube:
             job["status"] = "extracting"
             yt_result = await _try_youtube_description(url)
             if yt_result and len(yt_result.get("tracks", [])) >= 3:
@@ -447,9 +478,29 @@ async def _run_digest_job(job_id: str, url: str):
                 job["status"] = "done"
                 logger.info("YouTube description tracklist: %s — %d tracks", yt_result["metadata"]["title"], len(yt_result["tracks"]))
                 return
-            # No tracklist in description — fall through to AudD
 
-        # Strategy 2: yt-dlp + AudD audio fingerprinting
+            # No description tracklist — try audio fingerprinting if cookies available
+            if not has_cookies:
+                logger.info("No tracklist in YouTube description and no cookies for %s", url)
+                try:
+                    async with httpx.AsyncClient(timeout=10) as client:
+                        oembed_resp = await client.get(f"https://www.youtube.com/oembed?url={url}&format=json")
+                        oembed = oembed_resp.json() if oembed_resp.status_code == 200 else {}
+                    job["metadata"] = {
+                        "title": oembed.get("title", "Unknown"),
+                        "uploader": oembed.get("author_name", "Unknown"),
+                        "duration": 0,
+                        "thumbnail": oembed.get("thumbnail_url"),
+                    }
+                except Exception:
+                    pass
+                job["status"] = "failed"
+                job["error"] = "YouTube audio fingerprinting isn't available yet. Try a SoundCloud or Mixcloud link instead — those work instantly. Or upload the audio file directly using the Upload tab."
+                return
+            # Has cookies — fall through to yt-dlp + AudD pipeline
+            logger.info("YouTube: no description tracklist, trying audio fingerprint with cookies for %s", url)
+
+        # Strategy 2: yt-dlp + AudD audio fingerprinting (SC/MC always, YT with cookies)
         # Step 1: Extract metadata via yt-dlp (quick, no download)
         job["status"] = "extracting"
         info = extract_audio_url(url)
@@ -471,17 +522,17 @@ async def _run_digest_job(job_id: str, url: str):
         tmp_dir = "/tmp"
         tmp_template = os.path.join(tmp_dir, f"digest_{job_id}.%(ext)s")
 
+        dl_cmd = _yt_dlp_base_args() + [
+            "-f", "bestaudio/best",
+            "--no-playlist",
+            "--no-warnings",
+            "--extractor-args", "youtube:player_client=android",
+            "--geo-bypass",
+            "-o", tmp_template,
+            url,
+        ]
         dl_result = subprocess.run(
-            [
-                "yt-dlp",
-                "-f", "bestaudio/best",
-                "--no-playlist",
-                "--no-warnings",
-                "--extractor-args", "youtube:player_client=android",
-                "--geo-bypass",
-                "-o", tmp_template,
-                url,
-            ],
+            dl_cmd,
             capture_output=True,
             text=True,
             timeout=300,  # 5 min download timeout
@@ -1686,41 +1737,6 @@ async def api_status():
 
 
 # ── Static + Health ───────────────────────────────────────────────────────────
-
-@app.get("/api/debug/yt/{video_id}")
-async def debug_youtube(video_id: str):
-    """Temporary debug endpoint to test YouTube next API from Render."""
-    import re as _re
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.post(
-                "https://www.youtube.com/youtubei/v1/next?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
-                json={"videoId": video_id, "context": {"client": {"clientName": "WEB", "clientVersion": "2.20240101.00.00"}}},
-                headers={"Content-Type": "application/json"},
-            )
-        data = resp.json()
-        desc = ""
-        for panel in data.get("engagementPanels", []):
-            renderer = panel.get("engagementPanelSectionListRenderer", {})
-            items = renderer.get("content", {}).get("structuredDescriptionContentRenderer", {}).get("items", [])
-            for item in items:
-                body = item.get("expandableVideoDescriptionBodyRenderer", {})
-                desc = body.get("attributedDescriptionBodyText", {}).get("content", "")
-                if desc:
-                    break
-            if desc:
-                break
-        tracks = _re.findall(r'(\d{1,2}:\d{2}(?::\d{2})?)\s+(.+?)(?:\n|$)', desc)
-        return {
-            "status_code": resp.status_code,
-            "desc_length": len(desc),
-            "desc_preview": desc[:500],
-            "timestamp_tracks": len(tracks),
-            "tracks_preview": [{"ts": ts, "name": n.strip()} for ts, n in tracks[:5]],
-        }
-    except Exception as e:
-        return {"error": str(e)}
-
 
 @app.get("/health")
 async def health():
