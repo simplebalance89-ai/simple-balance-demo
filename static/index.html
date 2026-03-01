@@ -1082,6 +1082,8 @@
                     <span style="font-family:'Playfair Display',serif;font-size:1rem;color:#1DB954;">Spotify Connected</span>
                     <span id="spotifyUserLabel" style="font-size:0.75rem;color:#888;"></span>
                 </div>
+                <div style="font-size:0.7rem;color:#D4A017;margin-bottom:8px;">Search and click <strong>+ Add</strong> to build your profile</div>
+                <div id="profileTrackBadge" style="font-size:0.7rem;color:#4CAF50;margin-bottom:8px;display:none;"></div>
                 <div style="display:flex;gap:8px;margin-bottom:12px;">
                     <input type="text" id="spotifySearchInput" placeholder="Search tracks, artists..." style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid #333;background:#1a1a2e;color:#fff;font-family:'Nunito',sans-serif;font-size:0.8rem;" onkeydown="if(event.key==='Enter')spotifySearch()">
                     <button onclick="spotifySearch()" style="padding:8px 16px;border-radius:8px;border:none;background:#1DB954;color:#fff;font-weight:700;cursor:pointer;font-size:0.8rem;">Search</button>
@@ -1132,11 +1134,24 @@
     <div class="step" id="step2">
         <div class="pick-header">
             <h2>Your Music Profile</h2>
-            <p>Analyze your connected music to build your taste profile</p>
+            <p>Build your taste profile to get personalized recommendations</p>
         </div>
         <div style="text-align:center;width:100%;max-width:500px;">
+            <!-- Summary of added tracks -->
+            <div id="step2TrackSummary" style="display:none;margin-bottom:16px;">
+                <div style="background:rgba(29,185,84,0.08);border:1px solid rgba(29,185,84,0.2);border-radius:12px;padding:12px;">
+                    <div style="font-size:0.8rem;color:#4CAF50;margin-bottom:4px;" id="step2TrackCount">0 tracks added</div>
+                    <div style="font-size:0.65rem;color:#8A7A5A;">from Spotify/Tidal search</div>
+                </div>
+            </div>
+            <!-- Manual favorites input (always available) -->
+            <div id="step2ManualSection" style="margin-bottom:16px;">
+                <div style="font-size:0.8rem;color:#FFE082;margin-bottom:8px;font-family:'Playfair Display',serif;">Or type your favorites</div>
+                <div id="step2FavInputs" style="text-align:left;"></div>
+                <button onclick="addStep2FavInput()" style="width:100%;padding:6px;border-radius:8px;border:1px dashed rgba(212,160,23,0.3);background:transparent;color:#D4A017;cursor:pointer;font-size:0.75rem;margin-bottom:12px;">+ Add song or artist</button>
+            </div>
             <button class="nav-btn primary" id="analyzeBtn" onclick="analyzeMyMusic()" style="font-size:1rem;padding:16px 40px;margin-bottom:20px;">
-                Analyze My Music
+                Build My Profile
             </button>
             <div id="analyzeStatus" style="display:none;margin-bottom:16px;">
                 <div style="font-size:0.85rem;color:#D4A017;" id="analyzeMsg">Analyzing your taste...</div>
@@ -1471,7 +1486,10 @@ async function spotifySearch() {
             row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;font-size:0.78rem;';
             const img = t.album_image ? `<img src="${t.album_image}" style="width:28px;height:28px;border-radius:3px;">` : '';
             const preview = t.preview_url ? `<button onclick="event.stopPropagation();new Audio('${t.preview_url}').play()" style="background:none;border:none;cursor:pointer;font-size:0.7rem;color:#1DB954;">▶</button>` : '';
-            row.innerHTML = `${img}<div style="flex:1;min-width:0;"><div style="color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.name}</div><div style="font-size:0.65rem;color:#666;">${t.artist} · ${t.album || ''}</div></div>${preview}`;
+            const trackName = (t.name || '').replace(/'/g, "\\'");
+            const trackArtist = (t.artist || '').replace(/'/g, "\\'");
+            const addBtn = `<button onclick="event.stopPropagation();addTrackToProfile('${trackName}','${trackArtist}','spotify');this.textContent='Added';this.disabled=true;this.style.color='#4CAF50';" style="background:none;border:1px solid rgba(29,185,84,0.3);border-radius:4px;cursor:pointer;font-size:0.6rem;color:#1DB954;padding:2px 6px;white-space:nowrap;">+ Add</button>`;
+            row.innerHTML = `${img}<div style="flex:1;min-width:0;"><div style="color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.name}</div><div style="font-size:0.65rem;color:#666;">${t.artist} · ${t.album || ''}</div></div>${addBtn}${preview}`;
             results.appendChild(row);
         });
     } catch (e) {
@@ -1541,7 +1559,10 @@ async function tidalSearch() {
             row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;font-size:0.78rem;';
             const art = t.album_art ? `<img src="${t.album_art}" style="width:28px;height:28px;border-radius:3px;">` : '<div style="width:28px;height:28px;border-radius:3px;background:#1a2a3a;display:flex;align-items:center;justify-content:center;font-size:0.7rem;">🌊</div>';
             const link = t.url ? `<a href="${t.url}" target="_blank" style="color:#00BFFF;font-size:0.65rem;text-decoration:none;">Open</a>` : '';
-            row.innerHTML = `${art}<div style="flex:1;min-width:0;"><div style="color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.title}</div><div style="font-size:0.65rem;color:#666;">${t.artist}</div></div>${link}`;
+            const trackTitle = (t.title || '').replace(/'/g, "\\'");
+            const trackArtist = (t.artist || '').replace(/'/g, "\\'");
+            const addBtn = `<button onclick="event.stopPropagation();addTrackToProfile('${trackTitle}','${trackArtist}','tidal');this.textContent='Added';this.disabled=true;this.style.color='#4CAF50';" style="background:none;border:1px solid rgba(0,191,255,0.3);border-radius:4px;cursor:pointer;font-size:0.6rem;color:#00BFFF;padding:2px 6px;white-space:nowrap;">+ Add</button>`;
+            row.innerHTML = `${art}<div style="flex:1;min-width:0;"><div style="color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.title}</div><div style="font-size:0.65rem;color:#666;">${t.artist}</div></div>${addBtn}${link}`;
             results.appendChild(row);
         });
     } catch (e) {
@@ -1668,10 +1689,28 @@ async function buildProfile() {
     }
 }
 
+/* ===== ADD TRACK TO PROFILE ===== */
+function addTrackToProfile(name, artist, source) {
+    const entry = { name: name, artist: artist, source: source };
+    // Avoid duplicates
+    if (spotifyTracks.some(t => t.name === name && t.artist === artist)) return;
+    spotifyTracks.push(entry);
+    updateProfileTrackCount();
+    enableStep1Continue();
+}
+
+function updateProfileTrackCount() {
+    const badge = document.getElementById('profileTrackBadge');
+    if (badge) {
+        badge.style.display = spotifyTracks.length > 0 ? 'block' : 'none';
+        badge.textContent = spotifyTracks.length + ' track' + (spotifyTracks.length !== 1 ? 's' : '') + ' added to profile';
+    }
+}
+
 /* ===== NAVIGATION ===== */
 function goToStep(n) {
     // Gate: require connection before step 2+
-    if (n >= 2 && !spotifyConnected && !tidalConnected && mixUploadedTracks.length === 0 && !userProfile) {
+    if (n >= 2 && !spotifyConnected && !tidalConnected && mixUploadedTracks.length === 0 && !userProfile && spotifyTracks.length === 0) {
         var btn = document.getElementById('step1Next');
         if (btn) { btn.style.animation = 'none'; btn.offsetHeight; btn.style.animation = ''; }
         return;
@@ -1695,6 +1734,8 @@ function goToStep(n) {
         updateProgress(n);
     }
 
+    // Init step 2 profile builder
+    if (n === 2) initStep2();
     // Load archive list on step 5
     if (n === 5) loadArchiveStep5();
 
@@ -2815,6 +2856,32 @@ function sendToolsQuery() {
 }
 
 /* --- Analyze My Music (Profile) --- */
+function addStep2FavInput() {
+    const container = document.getElementById('step2FavInputs');
+    const count = container.children.length;
+    if (count >= 10) return;
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:6px;margin-bottom:6px;';
+    row.innerHTML = `<input type="text" placeholder="Song or artist name" style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid #333;background:#1a1a2e;color:#fff;font-family:'Nunito',sans-serif;font-size:0.8rem;">
+        <button onclick="this.parentElement.remove()" style="padding:4px 10px;border-radius:8px;border:1px solid #333;background:transparent;color:#666;cursor:pointer;font-size:0.8rem;">&times;</button>`;
+    container.appendChild(row);
+}
+
+function initStep2() {
+    // Show track count if any were added from search
+    var summary = document.getElementById('step2TrackSummary');
+    var countEl = document.getElementById('step2TrackCount');
+    if (spotifyTracks.length > 0) {
+        summary.style.display = 'block';
+        countEl.textContent = spotifyTracks.length + ' track' + (spotifyTracks.length !== 1 ? 's' : '') + ' added from search';
+    }
+    // Seed manual inputs
+    var container = document.getElementById('step2FavInputs');
+    if (container.children.length === 0) {
+        for (var i = 0; i < 3; i++) addStep2FavInput();
+    }
+}
+
 async function analyzeMyMusic() {
     var btn = document.getElementById('analyzeBtn');
     var status = document.getElementById('analyzeStatus');
@@ -2823,28 +2890,38 @@ async function analyzeMyMusic() {
     var card = document.getElementById('profileCard');
     if (!btn) return;
 
+    // Collect manual favorites from Step 2 inputs
+    var manualInputs = document.querySelectorAll('#step2FavInputs input');
+    var manualFavs = Array.from(manualInputs).map(function(i){ return i.value.trim(); }).filter(Boolean);
+
+    // Combine: searched tracks + manual entries + mix tracks
+    var favorites = [];
+    spotifyTracks.forEach(function(t){ favorites.push(t.name + ' by ' + t.artist); });
+    mixUploadedTracks.forEach(function(t){ favorites.push((t.name || t.title) + ' by ' + (t.artist || 'Unknown')); });
+    manualFavs.forEach(function(f){ favorites.push(f); });
+
+    if (favorites.length < 3) {
+        msg.style.color = '#C41E3A';
+        status.style.display = 'block';
+        msg.textContent = 'Add at least 3 songs — search on Spotify/Tidal and click "+ Add", or type them below.';
+        return;
+    }
+
     btn.disabled = true;
     btn.textContent = 'Analyzing...';
     status.style.display = 'block';
+    msg.style.color = '#D4A017';
     msg.textContent = 'Gathering your music data...';
     bar.style.width = '20%';
 
-    // Build payload from collected Spotify data + mix tracks
-    var allTracks = spotifyTracks.concat(mixUploadedTracks);
-    var payload = {
-        tracks: allTracks.slice(0, 30),
-        playlists: spotifyPlaylistNames,
-        genres: []
-    };
-
-    setTimeout(function(){ msg.textContent = 'Analyzing your taste with AI...'; bar.style.width = '50%'; }, 1000);
-    setTimeout(function(){ msg.textContent = 'Building your profile...'; bar.style.width = '75%'; }, 3000);
+    setTimeout(function(){ msg.textContent = 'Analyzing your taste with AI...'; bar.style.width = '50%'; }, 1500);
+    setTimeout(function(){ msg.textContent = 'Finding tracks on Spotify + Tidal...'; bar.style.width = '75%'; }, 4000);
 
     try {
-        var res = await fetch('/api/profile/analyze', {
+        var res = await fetch('/api/profile/build', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(payload)
+            body: JSON.stringify({ favorites: favorites.slice(0, 20) })
         });
         var data = await res.json();
         bar.style.width = '100%';
@@ -2853,7 +2930,7 @@ async function analyzeMyMusic() {
             msg.textContent = 'Error: ' + data.error;
             msg.style.color = '#C41E3A';
             btn.disabled = false;
-            btn.textContent = 'Analyze My Music';
+            btn.textContent = 'Build My Profile';
             return;
         }
 
@@ -2861,12 +2938,28 @@ async function analyzeMyMusic() {
         userProfile = profile;
         status.style.display = 'none';
         btn.style.display = 'none';
+        document.getElementById('step2ManualSection').style.display = 'none';
+        document.getElementById('step2TrackSummary').style.display = 'none';
 
         // Render profile card
         var genres = (profile.genres || []).map(function(g){ return '<span class="profile-genre-tag">' + g + '</span>'; }).join('');
         var keys = (profile.key_clusters || []).join(', ');
         var bpmMin = profile.bpm_range ? profile.bpm_range.min : '?';
         var bpmMax = profile.bpm_range ? profile.bpm_range.max : '?';
+
+        // Build recommendations HTML
+        var recsHtml = '';
+        var recs = data.recommendations || [];
+        if (recs.length) {
+            recsHtml = '<div style="font-family:Playfair Display,serif;font-size:0.9rem;color:#FFE082;margin:16px 0 10px;">Recommended For You</div>';
+            recs.forEach(function(r) {
+                var platforms = [];
+                if (r.spotify && r.spotify.url) platforms.push('<a href="' + r.spotify.url + '" target="_blank" style="color:#1DB954;font-size:0.6rem;text-decoration:none;background:rgba(29,185,84,0.15);padding:2px 6px;border-radius:4px;">Spotify</a>');
+                if (r.tidal && r.tidal.url) platforms.push('<a href="' + r.tidal.url + '" target="_blank" style="color:#00BFFF;font-size:0.6rem;text-decoration:none;background:rgba(0,191,255,0.1);padding:2px 6px;border-radius:4px;">Tidal</a>');
+                var art = (r.spotify && r.spotify.album_art) ? '<img src="' + r.spotify.album_art + '" style="width:36px;height:36px;border-radius:4px;">' : '<div style="width:36px;height:36px;border-radius:4px;background:#222;display:flex;align-items:center;justify-content:center;">🎵</div>';
+                recsHtml += '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);">' + art + '<div style="flex:1;min-width:0;"><div style="font-size:0.82rem;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + r.title + '</div><div style="font-size:0.65rem;color:#8A7A5A;">' + r.artist + (r.bpm ? ' · ' + r.bpm + ' BPM' : '') + (r.key ? ' · ' + r.key : '') + '</div>' + (r.reason ? '<div style="font-size:0.6rem;color:#6A6A7A;font-style:italic;">' + r.reason + '</div>' : '') + '</div><div style="display:flex;gap:6px;">' + platforms.join('') + '</div></div>';
+            });
+        }
 
         card.style.display = 'block';
         card.innerHTML =
@@ -2878,13 +2971,13 @@ async function analyzeMyMusic() {
                 '<div class="profile-stat"><span class="ps-label">Key Clusters</span><span class="ps-value">' + (keys || '—') + '</span></div>' +
                 '<div class="profile-stat"><span class="ps-label">Mood</span><span class="ps-value">' + (profile.mood || '—') + '</span></div>' +
                 '<div class="profile-stat"><span class="ps-label">DJ Style</span><span class="ps-value">' + (profile.dj_style || '—') + '</span></div>' +
-            '</div>';
+            '</div>' + recsHtml;
     } catch (e) {
         bar.style.width = '100%';
         msg.textContent = 'Analysis failed. Try again.';
         msg.style.color = '#C41E3A';
         btn.disabled = false;
-        btn.textContent = 'Analyze My Music';
+        btn.textContent = 'Build My Profile';
     }
 }
 
