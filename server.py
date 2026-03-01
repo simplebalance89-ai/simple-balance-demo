@@ -4,6 +4,7 @@ import json
 import secrets
 import logging
 import subprocess
+import tempfile
 import httpx
 import replicate
 from urllib.parse import urlencode
@@ -287,6 +288,115 @@ def parse_enterprise_result(results):
     return {"tracks": tracks, "raw_matches": raw_count, "unique_tracks": len(tracks)}
 
 
+# ── Chunked AudD Scanning ────────────────────────────────────────────────────
+CHUNK_DURATION = 300   # 5 minutes per chunk
+CHUNK_CONCURRENCY = 3  # max parallel AudD calls
+
+
+def _split_audio_chunks(audio_path: str, chunk_secs: int = CHUNK_DURATION) -> list:
+    """Split audio file into chunks using ffmpeg. Returns list of (chunk_path, start_offset_secs)."""
+    import glob as glob_mod
+    base = os.path.splitext(audio_path)[0]
+    ext = os.path.splitext(audio_path)[1] or ".mp3"
+    pattern = f"{base}_chunk_%03d{ext}"
+
+    result = subprocess.run(
+        ["ffmpeg", "-i", audio_path, "-f", "segment", "-segment_time", str(chunk_secs),
+         "-c", "copy", "-y", "-loglevel", "error", pattern],
+        capture_output=True, text=True, timeout=120,
+    )
+
+    if result.returncode != 0:
+        logger.error("ffmpeg chunking failed: %s", result.stderr[:500])
+        return []
+
+    chunks = sorted(glob_mod.glob(f"{base}_chunk_*{ext}"))
+    return [(path, i * chunk_secs) for i, path in enumerate(chunks)]
+
+
+async def _scan_chunk(chunk_path: str, token: str, offset_secs: int) -> list:
+    """Send one audio chunk to AudD, return results with adjusted offsets."""
+    data = {
+        "api_token": token,
+        "accurate_offsets": "true",
+        "return": "spotify,apple_music,deezer",
+        "skip": "1",
+        "every": "3",
+    }
+
+    with open(chunk_path, "rb") as f:
+        file_data = f.read()
+
+    async with httpx.AsyncClient(timeout=300) as client:
+        response = await client.post(
+            AUDD_API_URL,
+            data=data,
+            files={"file": (os.path.basename(chunk_path), file_data, "audio/mpeg")},
+        )
+        response.raise_for_status()
+        result = response.json()
+
+    if "result" not in result or not result["result"]:
+        return []
+
+    # Adjust offsets by chunk start time
+    for match in result["result"]:
+        if "offset" in match:
+            match["offset"] = int(float(match["offset"])) + offset_secs
+
+    return result["result"]
+
+
+async def _scan_audio_chunked(audio_path: str, token: str, progress_cb=None) -> dict:
+    """Split audio into chunks, scan each via AudD in parallel, merge results.
+    progress_cb(completed, total) called after each chunk finishes."""
+    chunks = _split_audio_chunks(audio_path)
+
+    if not chunks:
+        # Fallback: scan whole file as single chunk (ffmpeg failed or tiny file)
+        logger.info("Chunking failed or unnecessary, scanning whole file")
+        chunks = [(audio_path, 0)]
+
+    total = len(chunks)
+    logger.info("Scanning %d chunks of %s", total, os.path.basename(audio_path))
+
+    all_results = []
+    completed = 0
+    sem = asyncio.Semaphore(CHUNK_CONCURRENCY)
+
+    async def scan_one(chunk_path, offset):
+        nonlocal completed
+        async with sem:
+            try:
+                results = await _scan_chunk(chunk_path, token, offset)
+                return results
+            except Exception as e:
+                logger.error("Chunk scan failed (%s offset %ds): %s", chunk_path, offset, e)
+                return []
+            finally:
+                completed += 1
+                if progress_cb:
+                    progress_cb(completed, total)
+
+    tasks = [scan_one(path, offset) for path, offset in chunks]
+    chunk_results = await asyncio.gather(*tasks)
+
+    for r in chunk_results:
+        all_results.extend(r)
+
+    # Clean up chunk files (but not the original audio)
+    for path, _ in chunks:
+        if path != audio_path:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+
+    parsed = parse_enterprise_result(all_results)
+    parsed["chunks_scanned"] = total
+    return parsed
+
+
 @app.post("/api/digestor")
 async def digestor(file: UploadFile = File(...)):
     """Extract tracklist from uploaded DJ mix via AudD Enterprise."""
@@ -298,34 +408,23 @@ async def digestor(file: UploadFile = File(...)):
     if len(file_data) == 0:
         return JSONResponse({"error": "Empty file"}, status_code=400)
 
-    data = {
-        "api_token": token,
-        "accurate_offsets": "true",
-        "return": "spotify,apple_music,deezer",
-        "skip": "2",
-        "every": "5",
-    }
+    # Write to temp file for chunked scanning
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3", dir="/tmp")
+    tmp.write(file_data)
+    tmp.close()
 
     try:
-        async with httpx.AsyncClient(timeout=300) as client:
-            response = await client.post(
-                AUDD_API_URL,
-                data=data,
-                files={"file": (file.filename or "mix.mp3", file_data, file.content_type or "audio/mpeg")},
-            )
-            response.raise_for_status()
-            result = response.json()
-
-        if "result" not in result:
-            error_msg = result.get("error", {}).get("error_message", "Unknown error from AudD")
-            return JSONResponse({"error": error_msg, "tracks": []}, status_code=200)
-
-        return parse_enterprise_result(result["result"])
-
+        parsed = await _scan_audio_chunked(tmp.name, token)
+        return parsed
     except httpx.TimeoutException:
         return JSONResponse({"error": "Request timed out. Mix may be too large.", "tracks": []}, status_code=200)
     except Exception as e:
         return JSONResponse({"error": str(e), "tracks": []}, status_code=500)
+    finally:
+        try:
+            os.remove(tmp.name)
+        except OSError:
+            pass
 
 
 # ── YouTube Description Tracklist Extractor ───────────────────────────────────
@@ -554,42 +653,22 @@ async def _run_digest_job(job_id: str, url: str):
         file_size = os.path.getsize(tmp_path)
         logger.info("Downloaded %s (%.1f MB)", tmp_path, file_size / 1024 / 1024)
 
-        # Step 3: Upload file to AudD Enterprise API
+        # Step 3: Chunked AudD fingerprinting
         job["status"] = "scanning"
-        logger.info("AudD scanning: %s", job["metadata"]["title"])
-        data = {
-            "api_token": token,
-            "accurate_offsets": "true",
-            "return": "spotify,apple_music,deezer",
-            "skip": "2",
-            "every": "5",
-        }
+        logger.info("AudD chunked scan: %s", job["metadata"]["title"])
 
-        with open(tmp_path, "rb") as f:
-            file_data = f.read()
+        def on_chunk_progress(done, total):
+            job["scan_progress"] = f"{done}/{total}"
 
-        async with httpx.AsyncClient(timeout=900) as client:
-            response = await client.post(
-                AUDD_API_URL,
-                data=data,
-                files={"file": (os.path.basename(tmp_path), file_data, "audio/mpeg")},
-            )
-            response.raise_for_status()
-            result = response.json()
+        parsed = await _scan_audio_chunked(tmp_path, token, progress_cb=on_chunk_progress)
 
-        if "result" not in result:
-            error_msg = result.get("error", {}).get("error_message", "Unknown error from AudD")
-            job["status"] = "failed"
-            job["error"] = error_msg
-            return
-
-        # Step 4: Parse results
+        # Step 4: Finalize
         job["status"] = "parsing"
-        parsed = parse_enterprise_result(result["result"])
         parsed["metadata"] = job["metadata"]
         job["result"] = parsed
         job["status"] = "done"
-        logger.info("Digest complete: %s — %d tracks found", job["metadata"]["title"], len(parsed.get("tracks", [])))
+        logger.info("Digest complete: %s — %d tracks from %d chunks",
+                     job["metadata"]["title"], len(parsed.get("tracks", [])), parsed.get("chunks_scanned", 1))
 
     except subprocess.TimeoutExpired:
         job["status"] = "failed"
@@ -627,6 +706,7 @@ async def digest_url(payload: dict):
         "metadata": None,
         "result": None,
         "error": None,
+        "scan_progress": None,
         "started_at": time.time(),
     }
 
@@ -648,6 +728,7 @@ async def digest_url_status(job_id: str):
         "status": job["status"],
         "elapsed_seconds": elapsed,
         "metadata": job["metadata"],
+        "scan_progress": job.get("scan_progress"),
     }
 
     if job["status"] == "done":

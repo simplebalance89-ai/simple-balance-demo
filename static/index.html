@@ -2765,16 +2765,28 @@ function _digestUrlCommon(urlInputId, statusId, metaId, resultsId, onSuccess) {
 
                 // Update progress bar based on status
                 if (poll.status === 'extracting') { if(bar) bar.style.width = '15%'; }
+                else if (poll.status === 'downloading') { if(bar) bar.style.width = '20%'; }
                 else if (poll.status === 'scanning') {
-                    // Scanning is the long phase — estimate progress based on duration
-                    var duration = (poll.metadata && poll.metadata.duration) || 7200;
-                    // Rough estimate: AudD processes ~10-20x realtime
-                    var scanPct = Math.min(85, 20 + (elapsed / (duration / 15)) * 65);
-                    if(bar) bar.style.width = scanPct + '%';
+                    // Use chunk progress if available, otherwise estimate
+                    if (poll.scan_progress) {
+                        var parts = poll.scan_progress.split('/');
+                        var done = parseInt(parts[0]), total = parseInt(parts[1]);
+                        var scanPct = Math.min(88, 25 + (done / total) * 63);
+                        if(bar) bar.style.width = scanPct + '%';
+                    } else {
+                        var duration = (poll.metadata && poll.metadata.duration) || 7200;
+                        var scanPct = Math.min(85, 20 + (elapsed / (duration / 15)) * 65);
+                        if(bar) bar.style.width = scanPct + '%';
+                    }
                 }
                 else if (poll.status === 'parsing') { if(bar) bar.style.width = '90%'; }
 
-                if (msgEl) msgEl.textContent = STATUS_MESSAGES[poll.status] || poll.status;
+                // Dynamic scanning message with chunk progress
+                var statusMsg = STATUS_MESSAGES[poll.status] || poll.status;
+                if (poll.status === 'scanning' && poll.scan_progress) {
+                    statusMsg = 'Fingerprinting chunk ' + poll.scan_progress + '...';
+                }
+                if (msgEl) msgEl.textContent = statusMsg;
 
                 // Done!
                 if (poll.status === 'done') {
