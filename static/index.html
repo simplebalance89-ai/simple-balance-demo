@@ -1135,6 +1135,7 @@
                 <div style="display:flex;gap:8px;margin-bottom:10px;">
                     <input type="text" id="step1UrlInput" placeholder="https://youtube.com/watch?v=..." style="flex:1;padding:10px 14px;border-radius:10px;border:1px solid #333;background:#1a1a2e;color:#fff;font-family:'Nunito',sans-serif;font-size:0.85rem;" onkeydown="if(event.key==='Enter')digestUrlStep1()">
                     <button onclick="digestUrlStep1()" style="padding:10px 20px;border-radius:10px;border:none;background:linear-gradient(135deg,#D4A017,#B8860B);color:#0D0D1A;font-weight:800;cursor:pointer;font-family:'Nunito',sans-serif;font-size:0.85rem;">Digest</button>
+                    <button onclick="downloadAudioStep1()" style="padding:10px 14px;border-radius:10px;border:1px solid rgba(212,160,23,0.4);background:transparent;color:#D4A017;font-weight:700;cursor:pointer;font-family:'Nunito',sans-serif;font-size:0.75rem;white-space:nowrap;">MP3</button>
                 </div>
                 <div style="display:flex;gap:6px;flex-wrap:wrap;">
                     <span style="font-size:0.6rem;background:rgba(255,0,0,0.15);color:#FF4444;padding:3px 8px;border-radius:6px;">YouTube</span>
@@ -2528,6 +2529,7 @@ function buildDigestorExperience(name, modeName) {
                     <div style="display:flex;gap:8px;">
                         <input type="text" id="digestUrlInput" placeholder="https://youtube.com/watch?v=..." style="flex:1;padding:10px 14px;border-radius:10px;border:1px solid #333;background:#1a1a2e;color:#fff;font-family:'Nunito',sans-serif;font-size:0.85rem;" onkeydown="if(event.key==='Enter')digestUrl()">
                         <button onclick="digestUrl()" style="padding:10px 20px;border-radius:10px;border:none;background:linear-gradient(135deg,#D4A017,#B8860B);color:#0D0D1A;font-weight:800;cursor:pointer;font-family:'Nunito',sans-serif;">Digest</button>
+                        <button onclick="downloadAudioStep3()" style="padding:10px 14px;border-radius:10px;border:1px solid rgba(212,160,23,0.4);background:transparent;color:#D4A017;font-weight:700;cursor:pointer;font-family:'Nunito',sans-serif;font-size:0.75rem;white-space:nowrap;">MP3</button>
                     </div>
                     <div style="display:flex;gap:6px;justify-content:center;margin-top:10px;">
                         <span style="font-size:0.6rem;background:rgba(255,0,0,0.15);color:#FF4444;padding:3px 8px;border-radius:6px;">YouTube</span>
@@ -2830,6 +2832,90 @@ function digestUrl() {
     var dropZone = document.getElementById('dropZone');
     if (dropZone) dropZone.style.display = 'none';
     _digestUrlCommon('digestUrlInput', 'digestorStatus', 'digestorMeta', 'digestorResults', null);
+}
+
+/* --- Audio Download (MP3) --- */
+var _dlPollTimers = {};
+
+function _downloadAudio(urlInputId, statusId) {
+    var url = document.getElementById(urlInputId).value.trim();
+    if (!url) return;
+
+    var status = document.getElementById(statusId);
+    status.style.display = 'block';
+    status.innerHTML = '<div style="font-size:0.85rem;color:#D4A017;">Starting download...</div>' +
+        '<div style="width:100%;height:4px;background:rgba(255,255,255,0.06);border-radius:2px;margin-top:12px;overflow:hidden;">' +
+        '<div id="' + statusId + 'DlBar" style="width:5%;height:100%;background:linear-gradient(90deg,#7C3AED,#A78BFA);border-radius:2px;transition:width 0.5s ease;"></div></div>' +
+        '<div id="' + statusId + 'DlElapsed" style="font-size:0.65rem;color:#666;margin-top:6px;"></div>';
+
+    fetch('/api/download/audio', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({url: url})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+        if (data.error) {
+            status.innerHTML = '<div style="font-size:0.85rem;color:#C41E3A;">Error: ' + data.error + '</div>';
+            return;
+        }
+        var jobId = data.job_id;
+        var pollKey = statusId + '_dl';
+        if (_dlPollTimers[pollKey]) clearInterval(_dlPollTimers[pollKey]);
+
+        var DL_STATUS = {
+            'queued': 'Queued...',
+            'extracting': 'Extracting metadata...',
+            'downloading': 'Downloading & converting to MP3...'
+        };
+
+        _dlPollTimers[pollKey] = setInterval(function() {
+            fetch('/api/download/audio/status/' + jobId)
+            .then(function(r){ return r.json(); })
+            .then(function(poll){
+                var bar = document.getElementById(statusId + 'DlBar');
+                var elapsedEl = document.getElementById(statusId + 'DlElapsed');
+                var elapsed = poll.elapsed_seconds || 0;
+                if (elapsedEl) elapsedEl.textContent = elapsed + 's elapsed';
+
+                if (poll.status === 'extracting') { if(bar) bar.style.width = '15%'; }
+                else if (poll.status === 'downloading') {
+                    var pct = Math.min(85, 20 + elapsed * 1.5);
+                    if(bar) bar.style.width = pct + '%';
+                }
+
+                var msg = status.querySelector('div');
+                if (msg) msg.textContent = DL_STATUS[poll.status] || poll.status;
+
+                if (poll.status === 'done') {
+                    clearInterval(_dlPollTimers[pollKey]);
+                    if(bar) bar.style.width = '100%';
+                    var title = (poll.metadata && poll.metadata.title) || 'audio';
+                    status.innerHTML = '<div style="text-align:center;padding:16px;">' +
+                        '<div style="font-size:0.85rem;color:#1DB954;margin-bottom:12px;">Ready!</div>' +
+                        '<a href="' + poll.download_url + '" download style="display:inline-block;padding:12px 28px;border-radius:12px;background:linear-gradient(135deg,#7C3AED,#A78BFA);color:#fff;font-weight:800;text-decoration:none;font-family:\'Nunito\',sans-serif;font-size:0.9rem;">Download MP3</a>' +
+                        '<div style="font-size:0.7rem;color:#8A7A5A;margin-top:8px;">' + title + '</div></div>';
+                }
+
+                if (poll.status === 'failed') {
+                    clearInterval(_dlPollTimers[pollKey]);
+                    status.innerHTML = '<div style="font-size:0.85rem;color:#C41E3A;">Error: ' + (poll.error || 'Download failed') + '</div>';
+                }
+            })
+            .catch(function(){});
+        }, 3000);
+    })
+    .catch(function(err){
+        status.innerHTML = '<div style="font-size:0.85rem;color:#C41E3A;">Network error: ' + err.message + '</div>';
+    });
+}
+
+function downloadAudioStep1() {
+    _downloadAudio('step1UrlInput', 'step1UrlStatus');
+}
+
+function downloadAudioStep3() {
+    _downloadAudio('digestUrlInput', 'digestorStatus');
 }
 
 /* --- Events Radar --- */

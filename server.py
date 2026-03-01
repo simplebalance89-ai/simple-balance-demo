@@ -11,7 +11,7 @@ from urllib.parse import urlencode
 import asyncio
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from openai import AzureOpenAI
 
@@ -206,6 +206,166 @@ async def chat(payload: dict):
         return {"response": response.choices[0].message.content}
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# ── Audio Download (YouTube/SoundCloud/Mixcloud → MP3) ───────────────────────
+
+_download_jobs = {}  # {job_id: {status, metadata, file_path, error, started_at}}
+
+
+async def _run_download_job(job_id: str, url: str):
+    """Background coroutine: download audio via yt-dlp and convert to mp3."""
+    job = _download_jobs[job_id]
+    tmp_dir = "/tmp"
+
+    try:
+        # Step 1: Extract metadata
+        job["status"] = "extracting"
+        info = extract_audio_url(url)
+        if "error" in info:
+            job["status"] = "failed"
+            job["error"] = info["error"]
+            return
+
+        title = info.get("title", "audio")
+        # Sanitize filename
+        safe_title = "".join(c if c.isalnum() or c in " -_" else "" for c in title).strip()[:80] or "audio"
+        job["metadata"] = {
+            "title": title,
+            "safe_title": safe_title,
+            "uploader": info.get("uploader", "Unknown"),
+            "duration": info.get("duration", 0),
+            "thumbnail": info.get("thumbnail"),
+        }
+
+        # Step 2: Download + convert to mp3 via yt-dlp
+        job["status"] = "downloading"
+        out_path = os.path.join(tmp_dir, f"dl_{job_id}.mp3")
+
+        dl_cmd = _yt_dlp_base_args() + [
+            "-f", "bestaudio/best",
+            "--no-playlist",
+            "--no-warnings",
+            "--extractor-args", "youtube:player_client=android",
+            "--geo-bypass",
+            "--extract-audio",
+            "--audio-format", "mp3",
+            "--audio-quality", "0",
+            "-o", os.path.join(tmp_dir, f"dl_{job_id}.%(ext)s"),
+            url,
+        ]
+        dl_result = subprocess.run(
+            dl_cmd,
+            capture_output=True, text=True, timeout=600,
+        )
+
+        if dl_result.returncode != 0:
+            job["status"] = "failed"
+            job["error"] = f"Download failed: {dl_result.stderr.strip()[:300]}"
+            return
+
+        # yt-dlp may output as .mp3 directly or we need to find the file
+        import glob as glob_mod
+        matches = glob_mod.glob(os.path.join(tmp_dir, f"dl_{job_id}.*"))
+        if not matches:
+            job["status"] = "failed"
+            job["error"] = "Download completed but no file found."
+            return
+
+        job["file_path"] = matches[0]
+        job["status"] = "done"
+        file_size = os.path.getsize(matches[0])
+        logger.info("Download complete: %s (%.1f MB)", safe_title, file_size / 1024 / 1024)
+
+    except subprocess.TimeoutExpired:
+        job["status"] = "failed"
+        job["error"] = "Download timed out (10 min). Try a shorter video."
+    except Exception as e:
+        logger.error("Download job %s failed: %s", job_id, e)
+        job["status"] = "failed"
+        job["error"] = str(e)
+
+
+@app.post("/api/download/audio")
+async def download_audio_start(payload: dict):
+    """Submit a URL for audio download. Returns job_id for polling."""
+    url = (payload.get("url") or "").strip()
+    if not url:
+        return JSONResponse({"error": "No URL provided"}, status_code=400)
+
+    job_id = secrets.token_urlsafe(12)
+    _download_jobs[job_id] = {
+        "status": "queued",
+        "metadata": None,
+        "file_path": None,
+        "error": None,
+        "started_at": time.time(),
+    }
+    asyncio.create_task(_run_download_job(job_id, url))
+    return {"job_id": job_id, "status": "queued"}
+
+
+@app.get("/api/download/audio/status/{job_id}")
+async def download_audio_status(job_id: str):
+    """Poll for download job status."""
+    job = _download_jobs.get(job_id)
+    if not job:
+        return JSONResponse({"error": "Job not found"}, status_code=404)
+
+    elapsed = round(time.time() - job["started_at"])
+    response = {
+        "status": job["status"],
+        "elapsed_seconds": elapsed,
+        "metadata": job["metadata"],
+    }
+
+    if job["status"] == "done":
+        response["download_url"] = f"/api/download/audio/file/{job_id}"
+    elif job["status"] == "failed":
+        response["error"] = job["error"]
+
+    # Clean up stale jobs (file + entry) after 10 minutes
+    if elapsed > 600 and job["status"] in ("done", "failed"):
+        if job.get("file_path") and os.path.exists(job["file_path"]):
+            try:
+                os.remove(job["file_path"])
+            except OSError:
+                pass
+        _download_jobs.pop(job_id, None)
+
+    return response
+
+
+@app.get("/api/download/audio/file/{job_id}")
+async def download_audio_file(job_id: str):
+    """Serve the downloaded audio file. Auto-cleans after serving."""
+    job = _download_jobs.get(job_id)
+    if not job or job["status"] != "done" or not job.get("file_path"):
+        return JSONResponse({"error": "File not ready or not found"}, status_code=404)
+
+    file_path = job["file_path"]
+    if not os.path.exists(file_path):
+        return JSONResponse({"error": "File expired"}, status_code=410)
+
+    safe_title = job.get("metadata", {}).get("safe_title", "audio")
+    filename = f"{safe_title}.mp3"
+
+    def iterfile():
+        with open(file_path, "rb") as f:
+            while chunk := f.read(65536):
+                yield chunk
+        # Clean up after streaming
+        try:
+            os.remove(file_path)
+        except OSError:
+            pass
+        _download_jobs.pop(job_id, None)
+
+    return StreamingResponse(
+        iterfile(),
+        media_type="audio/mpeg",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ── AudD Mix Digestor ─────────────────────────────────────────────────────────
