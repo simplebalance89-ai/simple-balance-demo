@@ -1898,47 +1898,166 @@ async def ai_recommendations(genre: str = "", mood: str = "", artist: str = "",
 
 # ── Manual Profile Builder ──────────────────────────────────────────────────
 
+async def _build_profile_from_spotify(favorites: list) -> dict | None:
+    """Fallback: build a taste profile from Spotify audio features when Azure is down."""
+    spotify_token = await get_spotify_token()
+    if not spotify_token:
+        return None
+
+    key_names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+    track_ids = []
+    seed_ids = []
+    recs_from_spotify = []
+
+    async with httpx.AsyncClient(timeout=15) as http:
+        # Search each favorite on Spotify, collect track IDs
+        for fav in favorites[:10]:
+            query = fav if isinstance(fav, str) else f"{fav.get('title', '')} {fav.get('artist', '')}".strip()
+            if not query:
+                continue
+            try:
+                resp = await http.get(
+                    "https://api.spotify.com/v1/search",
+                    headers={"Authorization": f"Bearer {spotify_token}"},
+                    params={"q": query, "type": "track", "limit": 1},
+                )
+                if resp.status_code == 200:
+                    items = resp.json().get("tracks", {}).get("items", [])
+                    if items:
+                        track_ids.append(items[0]["id"])
+                        if len(seed_ids) < 5:
+                            seed_ids.append(items[0]["id"])
+            except Exception:
+                pass
+
+        if not track_ids:
+            return None
+
+        # Get audio features for all found tracks
+        bpms, energies, keys, danceabilities = [], [], [], []
+        try:
+            resp = await http.get(
+                f"https://api.spotify.com/v1/audio-features",
+                headers={"Authorization": f"Bearer {spotify_token}"},
+                params={"ids": ",".join(track_ids[:20])},
+            )
+            if resp.status_code == 200:
+                for af in (resp.json().get("audio_features") or []):
+                    if not af:
+                        continue
+                    bpms.append(af.get("tempo", 0))
+                    energies.append(af.get("energy", 0))
+                    danceabilities.append(af.get("danceability", 0))
+                    key_idx = af.get("key", -1)
+                    mode = "major" if af.get("mode", 0) == 1 else "minor"
+                    if 0 <= key_idx < 12:
+                        keys.append(f"{key_names[key_idx]} {mode}")
+        except Exception:
+            pass
+
+        # Build profile from aggregated features
+        avg_energy = sum(energies) / len(energies) if energies else 0.5
+        energy_level = "high" if avg_energy > 0.7 else ("low" if avg_energy < 0.35 else "medium")
+        bpm_min = round(min(bpms)) if bpms else 120
+        bpm_max = round(max(bpms)) if bpms else 130
+
+        # Count key frequency for top 3
+        key_counts = {}
+        for k in keys:
+            key_counts[k] = key_counts.get(k, 0) + 1
+        top_keys = sorted(key_counts, key=key_counts.get, reverse=True)[:3]
+
+        # Get Spotify recommendations from seed tracks
+        try:
+            resp = await http.get(
+                "https://api.spotify.com/v1/recommendations",
+                headers={"Authorization": f"Bearer {spotify_token}"},
+                params={"seed_tracks": ",".join(seed_ids), "limit": 10},
+            )
+            if resp.status_code == 200:
+                for t in resp.json().get("tracks", []):
+                    artists = ", ".join(a["name"] for a in t.get("artists", []))
+                    images = t.get("album", {}).get("images", [])
+                    recs_from_spotify.append({
+                        "title": t["name"],
+                        "artist": artists,
+                        "bpm": None,
+                        "key": None,
+                        "reason": "Based on your favorites (Spotify recommendation)",
+                        "spotify": {
+                            "url": t.get("external_urls", {}).get("spotify"),
+                            "album_art": images[0]["url"] if images else None,
+                            "preview_url": t.get("preview_url"),
+                        },
+                    })
+        except Exception:
+            pass
+
+    return {
+        "profile": {
+            "genres": ["electronic", "dance"],
+            "energy_level": energy_level,
+            "bpm_range": {"min": bpm_min, "max": bpm_max},
+            "key_clusters": top_keys or ["A minor"],
+            "mood": f"{'High' if avg_energy > 0.7 else 'Medium'} energy, {'danceable' if (sum(danceabilities) / len(danceabilities) if danceabilities else 0) > 0.6 else 'listening-focused'}",
+            "dj_style": f"{bpm_min}-{bpm_max} BPM range",
+        },
+        "recommendations": recs_from_spotify,
+        "_source": "spotify_fallback",
+    }
+
+
 @app.post("/api/profile/build")
 async def build_profile(payload: dict, request: Request):
     """Build a taste profile from manually entered favorites. No streaming account needed."""
-    client = get_ai_client()
-    if not client:
-        return JSONResponse({"error": "Azure OpenAI not configured"}, status_code=503)
-
-    model = get_secret("AZURE_OPENAI_MODEL", "gpt-4o")
     favorites = payload.get("favorites", [])
 
     if len(favorites) < 3:
         return JSONResponse({"error": "Add at least 3 favorites"}, status_code=400)
 
-    favorites_text = json.dumps(favorites[:20], indent=2)
+    result = None
+    client = get_ai_client()
 
-    system_prompt = (
-        "You are a music taste analyst for Simple Balance Music. Given a list of favorite songs/artists, "
-        "analyze the user's taste and generate a profile with 10 track recommendations. "
-        "Return ONLY valid JSON:\n"
-        '{"profile": {"genres": ["top 5 genres"], "energy_level": "high/medium/low", '
-        '"bpm_range": {"min": number, "max": number}, '
-        '"key_clusters": ["top 3 musical keys"], '
-        '"mood": "short mood description", '
-        '"dj_style": "short DJ style description"}, '
-        '"recommendations": [{"title": "...", "artist": "...", "bpm": number, "key": "...", "reason": "..."}]}'
-    )
+    # Try Azure OpenAI first
+    if client:
+        model = get_secret("AZURE_OPENAI_MODEL", "gpt-4o")
+        favorites_text = json.dumps(favorites[:20], indent=2)
 
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Build a taste profile from these favorites:\n{favorites_text}"},
-            ],
-            temperature=0.5,
-            response_format={"type": "json_object"},
+        system_prompt = (
+            "You are a music taste analyst for Simple Balance Music. Given a list of favorite songs/artists, "
+            "analyze the user's taste and generate a profile with 10 track recommendations. "
+            "Return ONLY valid JSON:\n"
+            '{"profile": {"genres": ["top 5 genres"], "energy_level": "high/medium/low", '
+            '"bpm_range": {"min": number, "max": number}, '
+            '"key_clusters": ["top 3 musical keys"], '
+            '"mood": "short mood description", '
+            '"dj_style": "short DJ style description"}, '
+            '"recommendations": [{"title": "...", "artist": "...", "bpm": number, "key": "...", "reason": "..."}]}'
         )
-        result = json.loads(response.choices[0].message.content)
 
-        # Enrich recommendations with Spotify + Tidal links
-        recs = result.get("recommendations", [])
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Build a taste profile from these favorites:\n{favorites_text}"},
+                ],
+                temperature=0.5,
+                response_format={"type": "json_object"},
+            )
+            result = json.loads(response.choices[0].message.content)
+        except Exception as e:
+            logger.warning(f"Azure OpenAI failed for profile build: {e}")
+
+    # Fallback: build profile from Spotify audio features
+    if not result:
+        result = await _build_profile_from_spotify(favorites)
+        if not result:
+            return JSONResponse({"error": "AI and Spotify both unavailable"}, status_code=503)
+
+    # Enrich recommendations with Spotify + Tidal links (skip if already from Spotify fallback)
+    recs = result.get("recommendations", [])
+    if result.get("_source") != "spotify_fallback":
         spotify_token = await get_spotify_token()
         tidal_token = await get_tidal_token()
 
@@ -1970,31 +2089,29 @@ async def build_profile(payload: dict, request: Request):
                         if tidal_results:
                             rec["tidal"] = tidal_results[0]
 
-        # Persist to Supabase if user is logged in
-        user = await get_current_user(request)
-        if user:
-            sb = get_supabase()
-            if sb:
-                try:
-                    profile = result.get("profile", {})
-                    sb.table("taste_profiles").upsert({
-                        "user_id": user["id"],
-                        "genres": profile.get("genres", []),
-                        "energy_level": profile.get("energy_level"),
-                        "bpm_min": profile.get("bpm_range", {}).get("min"),
-                        "bpm_max": profile.get("bpm_range", {}).get("max"),
-                        "key_clusters": profile.get("key_clusters", []),
-                        "mood": profile.get("mood"),
-                        "dj_style": profile.get("dj_style"),
-                        "favorites": payload.get("favorites", []),
-                        "recommendations": result.get("recommendations", []),
-                    }, on_conflict="user_id").execute()
-                except Exception:
-                    pass  # Don't fail the request if persistence fails
+    # Persist to Supabase if user is logged in
+    user = await get_current_user(request)
+    if user:
+        sb = get_supabase()
+        if sb:
+            try:
+                profile = result.get("profile", {})
+                sb.table("taste_profiles").upsert({
+                    "user_id": user["id"],
+                    "genres": profile.get("genres", []),
+                    "energy_level": profile.get("energy_level"),
+                    "bpm_min": profile.get("bpm_range", {}).get("min"),
+                    "bpm_max": profile.get("bpm_range", {}).get("max"),
+                    "key_clusters": profile.get("key_clusters", []),
+                    "mood": profile.get("mood"),
+                    "dj_style": profile.get("dj_style"),
+                    "favorites": payload.get("favorites", []),
+                    "recommendations": result.get("recommendations", []),
+                }, on_conflict="user_id").execute()
+            except Exception:
+                pass
 
-        return result
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+    return result
 
 
 @app.get("/api/spotify/audio-features/{track_id}")
