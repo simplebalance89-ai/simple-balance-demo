@@ -1,6 +1,29 @@
 import os
+import httpx
 from fastapi import Request, HTTPException
 from jose import jwt, JWTError
+
+# Cache the JWKS so we don't fetch it on every request
+_jwks_cache = None
+
+
+async def _get_jwks() -> dict | None:
+    """Fetch JWKS from Supabase for ES256 token validation (cached)."""
+    global _jwks_cache
+    if _jwks_cache:
+        return _jwks_cache
+    supabase_url = os.environ.get("SUPABASE_URL")
+    if not supabase_url:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(f"{supabase_url}/auth/v1/.well-known/jwks.json")
+            if resp.status_code == 200:
+                _jwks_cache = resp.json()
+                return _jwks_cache
+    except Exception:
+        pass
+    return None
 
 
 async def get_current_user(request: Request) -> dict | None:
@@ -9,18 +32,34 @@ async def get_current_user(request: Request) -> dict | None:
     if not auth_header.startswith("Bearer "):
         return None
     token = auth_header[7:]
+
+    # Try ES256 via JWKS first (newer Supabase projects)
+    jwks = await _get_jwks()
+    if jwks:
+        try:
+            payload = jwt.decode(token, jwks, algorithms=["ES256"], audience="authenticated")
+            return {
+                "id": payload.get("sub"),
+                "email": payload.get("email"),
+                "role": payload.get("role", "authenticated"),
+            }
+        except JWTError:
+            pass
+
+    # Fall back to HS256 with shared secret (older Supabase projects)
     secret = os.environ.get("SUPABASE_JWT_SECRET")
-    if not secret:
-        return None
-    try:
-        payload = jwt.decode(token, secret, algorithms=["HS256"], audience="authenticated")
-        return {
-            "id": payload.get("sub"),
-            "email": payload.get("email"),
-            "role": payload.get("role", "authenticated"),
-        }
-    except JWTError:
-        return None
+    if secret:
+        try:
+            payload = jwt.decode(token, secret, algorithms=["HS256"], audience="authenticated")
+            return {
+                "id": payload.get("sub"),
+                "email": payload.get("email"),
+                "role": payload.get("role", "authenticated"),
+            }
+        except JWTError:
+            pass
+
+    return None
 
 
 async def require_auth(request: Request) -> dict:
