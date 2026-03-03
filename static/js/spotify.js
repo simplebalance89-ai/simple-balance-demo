@@ -31,16 +31,56 @@ async function loadSpotifyUser(session) {
         spotifyConnected = true;
         updateSpotifyCardUI(true, data.user);
         loadUserPlaylists(session);
+        // Link Spotify session to Supabase user if logged in
+        linkSpotifyToSupabase(session);
     } catch (e) {
         localStorage.removeItem('spotify_session');
         spotifySession = '';
         spotifyConnected = false;
         spotifyUserInfo = null;
         updateSpotifyCardUI(false);
-        setTimeout(() => { if (!spotifyConnected) connectSpotifyClientCreds(); }, 5000);
+        // Try restoring from Supabase DB before falling back to client creds
+        const restored = await restoreSpotifyFromDB();
+        if (!restored) {
+            setTimeout(() => { if (!spotifyConnected) connectSpotifyClientCreds(); }, 5000);
+        }
     } finally {
         _spotifyValidating = false;
     }
+}
+
+async function linkSpotifyToSupabase(session) {
+    if (typeof getAuthHeadersAsync !== 'function') return;
+    try {
+        const headers = await getAuthHeadersAsync();
+        if (!headers.Authorization) return;
+        await fetch('/api/spotify/link', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...headers },
+            body: JSON.stringify({ spotify_session: session }),
+        });
+    } catch (e) { /* silent */ }
+}
+
+async function restoreSpotifyFromDB() {
+    if (typeof getAuthHeadersAsync !== 'function') return false;
+    try {
+        const headers = await getAuthHeadersAsync();
+        if (!headers.Authorization) return false;
+        const res = await fetch('/api/spotify/restore', { headers });
+        if (!res.ok) return false;
+        const data = await res.json();
+        if (data.restored && data.spotify_session) {
+            spotifySession = data.spotify_session;
+            localStorage.setItem('spotify_session', spotifySession);
+            spotifyUserInfo = data.user;
+            spotifyConnected = true;
+            updateSpotifyCardUI(true, data.user);
+            loadUserPlaylists(spotifySession);
+            return true;
+        }
+    } catch (e) { /* silent */ }
+    return false;
 }
 
 function updateSpotifyCardUI(connected, user) {

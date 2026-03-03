@@ -33,7 +33,8 @@ function uploadArchive(input) {
     var formData = new FormData();
     formData.append('file', file);
 
-    fetch('/api/archive/upload', { method: 'POST', body: formData })
+    var authHdrs = typeof getAuthHeaders === 'function' ? getAuthHeaders() : {};
+    fetch('/api/archive/upload', { method: 'POST', body: formData, headers: authHdrs })
     .then(function(r){ return r.json(); })
     .then(function(data){
         if (data.error) {
@@ -55,7 +56,8 @@ function uploadArchive(input) {
 function loadArchiveList() {
     var list = document.getElementById('archiveList');
     if (!list) return;
-    fetch('/api/archive')
+    var authHdrs = typeof getAuthHeaders === 'function' ? getAuthHeaders() : {};
+    fetch('/api/archive', { headers: authHdrs })
     .then(function(r){ return r.json(); })
     .then(function(data){
         if (!data.mixes || data.mixes.length === 0) {
@@ -162,7 +164,8 @@ function uploadArchiveLibrary(input) {
     var formData = new FormData();
     formData.append('file', file);
 
-    fetch('/api/archive/upload', { method: 'POST', body: formData })
+    var authHdrs = typeof getAuthHeaders === 'function' ? getAuthHeaders() : {};
+    fetch('/api/archive/upload', { method: 'POST', body: formData, headers: authHdrs })
     .then(function(r){ return r.json(); })
     .then(function(data){
         if (data.error) {
@@ -184,7 +187,8 @@ function uploadArchiveLibrary(input) {
 function loadArchiveListLibrary() {
     var list = document.getElementById('archiveListLib');
     if (!list) return;
-    fetch('/api/archive')
+    var authHdrs = typeof getAuthHeaders === 'function' ? getAuthHeaders() : {};
+    fetch('/api/archive', { headers: authHdrs })
     .then(function(r){ return r.json(); })
     .then(function(data){
         if (!data.mixes || data.mixes.length === 0) {

@@ -57,9 +57,10 @@ async function buildProfile() {
     setTimeout(() => { const b = document.getElementById('buildBar'); if(b) b.style.width = '75%'; }, 4000);
 
     try {
+        const authHdrs = typeof getAuthHeaders === 'function' ? getAuthHeaders() : {};
         const res = await fetch('/api/profile/build', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {'Content-Type': 'application/json', ...authHdrs},
             body: JSON.stringify({ favorites: favorites })
         });
         const data = await res.json();
@@ -195,9 +196,10 @@ async function analyzeMyMusic() {
     setTimeout(function(){ msg.textContent = 'Finding tracks on Spotify + Tidal...'; bar.style.width = '75%'; }, 4000);
 
     try {
+        var authHdrs = typeof getAuthHeaders === 'function' ? getAuthHeaders() : {};
         var res = await fetch('/api/profile/build', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: Object.assign({'Content-Type': 'application/json'}, authHdrs),
             body: JSON.stringify({ favorites: favorites.slice(0, 20) })
         });
         var data = await res.json();

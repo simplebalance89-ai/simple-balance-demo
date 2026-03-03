@@ -21,6 +21,7 @@
     <span style="font-family:'Playfair Display',serif;font-weight:700;color:#FFE082;">SBM</span>
     <span style="font-size:0.6rem;color:#8A7A5A;letter-spacing:2px;text-transform:uppercase;">AI Production Suite</span>
     <button onclick="clearAllCache()" style="background:none;border:none;color:#666;font-size:0.6rem;cursor:pointer;padding:4px 8px;">Clear Cache</button>
+    <div id="authHeaderBtn" onclick="showAuthModal('login')" style="cursor:pointer;font-size:0.7rem;color:#FFE082;padding:4px 8px;">Sign In</div>
 </div>
 
 <!-- Main Content -->
@@ -46,8 +47,10 @@
     </div>
 </nav>
 
-<!-- Scripts (order matters: utils first, then services, then tools, then profile, then library, then app last) -->
+<!-- Scripts (order matters: utils first, then auth, then services, then tools, then profile, then library, then app last) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="/static/js/utils.js"></script>
+<script src="/static/js/auth.js"></script>
 <script src="/static/js/spotify.js"></script>
 <script src="/static/js/tidal.js"></script>
 <script src="/static/js/tools.js"></script>

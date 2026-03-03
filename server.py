@@ -14,6 +14,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from openai import AzureOpenAI
+from auth import get_current_user
+from db import get_supabase
 
 logger = logging.getLogger(__name__)
 
@@ -1273,8 +1275,8 @@ mix_archive = []
 
 
 @app.post("/api/archive/upload")
-async def archive_upload(file: UploadFile = File(...)):
-    """Accept audio file upload, store filename + metadata in memory."""
+async def archive_upload(request: Request, file: UploadFile = File(...)):
+    """Accept audio file upload, store filename + metadata."""
     file_data = await file.read()
     if len(file_data) == 0:
         return JSONResponse({"error": "Empty file"}, status_code=400)
@@ -1288,12 +1290,37 @@ async def archive_upload(file: UploadFile = File(...)):
         "uploaded_at": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
     mix_archive.append(entry)
+
+    # Persist to Supabase if logged in
+    user = await get_current_user(request)
+    if user:
+        sb = get_supabase()
+        if sb:
+            try:
+                sb.table("mix_archive").insert({
+                    "user_id": user["id"],
+                    "filename": entry["filename"],
+                    "size_mb": size_mb,
+                }).execute()
+            except Exception:
+                pass
+
     return {"message": "Mix archived successfully", "entry": entry, "total": len(mix_archive)}
 
 
 @app.get("/api/archive")
-async def archive_list():
+async def archive_list(request: Request):
     """Return list of archived mixes."""
+    user = await get_current_user(request)
+    if user:
+        sb = get_supabase()
+        if sb:
+            try:
+                result = sb.table("mix_archive").select("*").eq("user_id", user["id"]).order("uploaded_at", desc=True).execute()
+                mixes = [{"id": r["id"], "filename": r["filename"], "size_mb": r.get("size_mb"), "uploaded_at": str(r.get("uploaded_at", ""))} for r in (result.data or [])]
+                return {"mixes": mixes, "total": len(mixes)}
+            except Exception:
+                pass
     return {"mixes": mix_archive, "total": len(mix_archive)}
 
 
@@ -1335,14 +1362,37 @@ async def tools_analyze(payload: dict):
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
 @app.get("/api/dashboard")
-async def dashboard():
-    """Return production stats (mock data + real archive count)."""
+async def dashboard(request: Request):
+    """Return production stats — real stats if logged in, mock otherwise."""
+    user = await get_current_user(request)
+    if user:
+        sb = get_supabase()
+        if sb:
+            try:
+                jobs_result = sb.table("jobs").select("job_type", count="exact").eq("user_id", user["id"]).execute()
+                archive_result = sb.table("mix_archive").select("id", count="exact").eq("user_id", user["id"]).execute()
+                sets_result = sb.table("saved_sets").select("id", count="exact").eq("user_id", user["id"]).execute()
+
+                job_counts = {}
+                for j in (jobs_result.data or []):
+                    jt = j.get("job_type", "other")
+                    job_counts[jt] = job_counts.get(jt, 0) + 1
+
+                return {
+                    "tracks_mastered": job_counts.get("mastering", 0),
+                    "sets_built": len(sets_result.data or []),
+                    "stems_separated": job_counts.get("stems", 0),
+                    "mixes_archived": len(archive_result.data or []),
+                    "discovery_sessions": job_counts.get("discovery", 0) + job_counts.get("chat", 0),
+                }
+            except Exception:
+                pass
     return {
-        "tracks_mastered": 12,
-        "sets_built": 3,
-        "stems_separated": 8,
+        "tracks_mastered": 0,
+        "sets_built": 0,
+        "stems_separated": 0,
         "mixes_archived": len(mix_archive),
-        "discovery_sessions": 15
+        "discovery_sessions": 0,
     }
 
 
@@ -1547,6 +1597,66 @@ async def spotify_me(session: str = ""):
     if session not in _spotify_user_sessions:
         return JSONResponse({"error": "Not logged in", "logged_in": False}, status_code=401)
     return {"logged_in": True, "user": _spotify_user_sessions[session]["user"]}
+
+
+@app.post("/api/spotify/link")
+async def spotify_link(request: Request, payload: dict):
+    """Link a Spotify session to the logged-in Supabase user for persistence."""
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse({"error": "Not logged in"}, status_code=401)
+    session = payload.get("spotify_session", "")
+    if session not in _spotify_user_sessions:
+        return JSONResponse({"error": "Invalid Spotify session"}, status_code=400)
+    sess = _spotify_user_sessions[session]
+    sb = get_supabase()
+    if not sb:
+        return JSONResponse({"error": "Database not configured"}, status_code=503)
+    try:
+        sb.table("spotify_sessions").upsert({
+            "user_id": user["id"],
+            "access_token": sess["access_token"],
+            "refresh_token": sess.get("refresh_token"),
+            "spotify_user_id": sess.get("user", {}).get("id"),
+            "spotify_display_name": sess.get("user", {}).get("name"),
+        }, on_conflict="user_id").execute()
+        sb.table("profiles").update({"spotify_connected": True}).eq("id", user["id"]).execute()
+    except Exception:
+        pass
+    return {"linked": True}
+
+
+@app.get("/api/spotify/restore")
+async def spotify_restore(request: Request):
+    """Restore a Spotify session from the database for a logged-in user."""
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse({"error": "Not logged in"}, status_code=401)
+    sb = get_supabase()
+    if not sb:
+        return {"restored": False}
+    try:
+        result = sb.table("spotify_sessions").select("*").eq("user_id", user["id"]).single().execute()
+        if not result.data:
+            return {"restored": False}
+        row = result.data
+        # Restore into in-memory sessions
+        session_id = secrets.token_urlsafe(32)
+        _spotify_user_sessions[session_id] = {
+            "access_token": row["access_token"],
+            "refresh_token": row.get("refresh_token"),
+            "expires_at": 3600,
+            "user": {
+                "id": row.get("spotify_user_id", ""),
+                "name": row.get("spotify_display_name", "Spotify User"),
+                "email": "",
+                "image": None,
+                "product": "free",
+            },
+        }
+        return {"restored": True, "spotify_session": session_id, "user": _spotify_user_sessions[session_id]["user"]}
+    except Exception:
+        return {"restored": False}
 
 
 @app.get("/api/spotify/user/playlists")
@@ -1789,7 +1899,7 @@ async def ai_recommendations(genre: str = "", mood: str = "", artist: str = "",
 # ── Manual Profile Builder ──────────────────────────────────────────────────
 
 @app.post("/api/profile/build")
-async def build_profile(payload: dict):
+async def build_profile(payload: dict, request: Request):
     """Build a taste profile from manually entered favorites. No streaming account needed."""
     client = get_ai_client()
     if not client:
@@ -1859,6 +1969,28 @@ async def build_profile(payload: dict):
                         tidal_results = await tidal_search_tracks(http, tidal_token, query, limit=1)
                         if tidal_results:
                             rec["tidal"] = tidal_results[0]
+
+        # Persist to Supabase if user is logged in
+        user = await get_current_user(request)
+        if user:
+            sb = get_supabase()
+            if sb:
+                try:
+                    profile = result.get("profile", {})
+                    sb.table("taste_profiles").upsert({
+                        "user_id": user["id"],
+                        "genres": profile.get("genres", []),
+                        "energy_level": profile.get("energy_level"),
+                        "bpm_min": profile.get("bpm_range", {}).get("min"),
+                        "bpm_max": profile.get("bpm_range", {}).get("max"),
+                        "key_clusters": profile.get("key_clusters", []),
+                        "mood": profile.get("mood"),
+                        "dj_style": profile.get("dj_style"),
+                        "favorites": payload.get("favorites", []),
+                        "recommendations": result.get("recommendations", []),
+                    }, on_conflict="user_id").execute()
+                except Exception:
+                    pass  # Don't fail the request if persistence fails
 
         return result
     except Exception as e:

@@ -7,3 +7,5 @@ httpx
 openai
 replicate
 yt-dlp
+supabase
+python-jose[cryptography]

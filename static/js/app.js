@@ -232,7 +232,8 @@ function renderHomeTab(app) {
         </div>`;
 
     // Load dashboard stats for home
-    fetch('/api/dashboard')
+    const dashHdrs = typeof getAuthHeaders === 'function' ? getAuthHeaders() : {};
+    fetch('/api/dashboard', { headers: dashHdrs })
     .then(r => r.json())
     .then(data => {
         const el1 = document.getElementById('home-val-mastered');
@@ -350,7 +351,8 @@ function renderLibraryTab(app) {
     loadArchiveListLibrary();
 
     // Load stats
-    fetch('/api/dashboard')
+    var libDashHdrs = typeof getAuthHeaders === 'function' ? getAuthHeaders() : {};
+    fetch('/api/dashboard', { headers: libDashHdrs })
     .then(r => r.json())
     .then(data => {
         var ids = { 'lib-val-mastered': data.tracks_mastered, 'lib-val-sets': data.sets_built, 'lib-val-stems': data.stems_separated, 'lib-val-archive': data.mixes_archived };

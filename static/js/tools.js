@@ -1097,7 +1097,8 @@ function buildDashboardExperience(name, modeName) {
 }
 
 function loadDashboardStats() {
-    fetch('/api/dashboard')
+    var hdrs = typeof getAuthHeaders === 'function' ? getAuthHeaders() : {};
+    fetch('/api/dashboard', { headers: hdrs })
     .then(function(r) { return r.json(); })
     .then(function(data) {
         var animate = function(id, target) {
