@@ -27,7 +27,7 @@ CREATE POLICY "Users can insert own profile"
     ON profiles FOR INSERT
     WITH CHECK (auth.uid() = id);
 
--- Auto-create profile on signup
+-- Auto-create profile on signup (fault-tolerant — never blocks signup)
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -36,7 +36,11 @@ BEGIN
         NEW.id,
         COALESCE(NEW.raw_user_meta_data->>'display_name', NEW.raw_user_meta_data->>'name', split_part(NEW.email, '@', 1)),
         NEW.raw_user_meta_data->>'avatar_url'
-    );
+    )
+    ON CONFLICT (id) DO NOTHING;
+    RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'handle_new_user failed for %: %', NEW.id, SQLERRM;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

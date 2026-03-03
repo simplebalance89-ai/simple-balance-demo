@@ -19,6 +19,15 @@ async function connectTidal() {
             if (lib) lib.style.display = 'block';
             return;
         }
+        // Check if credentials are set but auth is failing
+        const errData = await res.json().catch(() => ({}));
+        if (errData.configured) {
+            card.style.opacity = '1';
+            card.onclick = function(){ connectTidal(); };
+            card.querySelector('.cc-status').textContent = 'Tidal API auth failing — credentials may be expired';
+            card.querySelector('.cc-status').style.color = '#F59E0B';
+            return;
+        }
         const statusRes = await fetch('/api/status');
         const statusData = await statusRes.json();
         if (statusData.tidal) {

@@ -1728,10 +1728,10 @@ async def get_tidal_token():
             _tidal_token["expires_at"] = datetime.now() + timedelta(seconds=data.get("expires_in", 86400) - 60)
             return _tidal_token["access_token"]
     except httpx.HTTPStatusError as e:
-        print(f"[Tidal] Auth failed: {e.response.status_code} - {e.response.text[:200]}")
+        print(f"[Tidal] Auth failed: {e.response.status_code} - {e.response.text[:500]}")
         return None
     except Exception as e:
-        print(f"[Tidal] Auth error: {e}")
+        print(f"[Tidal] Auth error: {type(e).__name__}: {e}")
         return None
 
 
@@ -2005,6 +2005,28 @@ async def _build_profile_from_spotify(favorites: list) -> dict | None:
         "recommendations": recs_from_spotify,
         "_source": "spotify_fallback",
     }
+
+
+@app.post("/api/auth/ensure-profile")
+async def ensure_profile(request: Request):
+    """Ensure a profile row exists for the authenticated user. Called after signup/login."""
+    from auth import get_current_user
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    db = get_supabase()
+    if not db:
+        return {"ok": True, "note": "No DB configured"}
+    try:
+        existing = db.table("profiles").select("id").eq("id", user["id"]).execute()
+        if not existing.data:
+            db.table("profiles").insert({
+                "id": user["id"],
+                "display_name": user.get("email", "").split("@")[0],
+            }).execute()
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 
 @app.post("/api/profile/build")

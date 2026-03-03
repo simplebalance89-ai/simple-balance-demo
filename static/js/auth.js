@@ -81,32 +81,46 @@ async function authLogin(email, password) {
     currentUser = data.user;
     authUpdateUI(currentUser);
     closeAuthModal();
+    // Ensure profile row exists server-side
+    ensureProfile();
     return { data };
 }
 
 async function authSignup(email, password, displayName) {
     if (!supabaseClient) return { error: { message: 'Auth not initialized' } };
-    const { data, error } = await supabaseClient.auth.signUp({
-        email,
-        password,
-        options: {
-            data: { display_name: displayName || '' }
+    try {
+        const { data, error } = await supabaseClient.auth.signUp({
+            email,
+            password,
+            options: {
+                data: { display_name: displayName || '' }
+            }
+        });
+        if (error) {
+            // Supabase 500 = usually a trigger/DB issue
+            if (error.status === 500 || (error.message && error.message.indexOf('Database error') !== -1)) {
+                return { error: { message: 'Signup failed — database error. Ask Peter to run supabase_fix.sql in the Supabase SQL editor.' } };
+            }
+            return { error };
         }
-    });
-    if (error) return { error };
-    // If email confirmation is required, user won't be logged in yet
-    if (data.user && data.user.identities && data.user.identities.length === 0) {
-        return { error: { message: 'This email is already registered. Try logging in.' } };
+        // If email confirmation is required, user won't be logged in yet
+        if (data.user && data.user.identities && data.user.identities.length === 0) {
+            return { error: { message: 'This email is already registered. Try logging in.' } };
+        }
+        if (data.session) {
+            currentUser = data.user;
+            authUpdateUI(currentUser);
+            closeAuthModal();
+            // Ensure profile row exists server-side
+            ensureProfile();
+        } else {
+            // Email confirmation required
+            showAuthMessage('Check your email to confirm your account, then log in.');
+        }
+        return { data };
+    } catch (e) {
+        return { error: { message: 'Signup request failed: ' + (e.message || 'network error') } };
     }
-    if (data.session) {
-        currentUser = data.user;
-        authUpdateUI(currentUser);
-        closeAuthModal();
-    } else {
-        // Email confirmation required
-        showAuthMessage('Check your email to confirm your account, then log in.');
-    }
-    return { data };
 }
 
 async function authLogout() {
@@ -286,6 +300,18 @@ async function handleAuthSubmit(mode) {
             btn.textContent = mode === 'login' ? 'Sign In' : 'Sign Up';
         }
     }
+}
+
+/* ----- Ensure Profile Row Exists ----- */
+async function ensureProfile() {
+    try {
+        const headers = await getAuthHeadersAsync();
+        if (!headers.Authorization) return;
+        await fetch('/api/auth/ensure-profile', {
+            method: 'POST',
+            headers: headers,
+        });
+    } catch (e) { /* silent */ }
 }
 
 /* ----- Init on load ----- */
