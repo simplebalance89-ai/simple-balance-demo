@@ -18,17 +18,7 @@ let _spotifyValidating = false;
         loadSpotifyUser(spotifySession);
     }
 
-    window.addEventListener('message', function(e) {
-        if (e.data && e.data.spotify_session) {
-            spotifySession = e.data.spotify_session;
-            localStorage.setItem('spotify_session', e.data.spotify_session);
-            loadSpotifyUser(e.data.spotify_session);
-        }
-        if (e.data && e.data.spotify_error) {
-            console.warn('Spotify OAuth error:', e.data.spotify_error);
-            connectSpotifyClientCreds();
-        }
-    });
+    // No popup listener needed — using full-page redirect flow
 })();
 
 async function loadSpotifyUser(session) {
@@ -127,21 +117,11 @@ async function connectSpotify() {
             _spotifyValidating = false;
         }
     }
-    try {
-        const popup = window.open('/api/spotify/login', 'spotify-login', 'width=500,height=700,scrollbars=yes');
-        if (!popup) throw new Error('Popup blocked');
-        card.style.opacity = '0.6';
-        card.querySelector('.cc-status').textContent = 'Logging in...';
-        card.querySelector('.cc-status').style.color = '#D4A017';
-        const checkPopup = setInterval(() => {
-            if (popup.closed && !spotifyConnected) {
-                clearInterval(checkPopup);
-                connectSpotifyClientCreds();
-            }
-        }, 1000);
-    } catch (e) {
-        connectSpotifyClientCreds();
-    }
+    // Full-page redirect (works on mobile + desktop, no popup)
+    card.style.opacity = '0.6';
+    card.querySelector('.cc-status').textContent = 'Redirecting to Spotify...';
+    card.querySelector('.cc-status').style.color = '#D4A017';
+    window.location.href = '/api/spotify/login?redirect_to=' + encodeURIComponent(window.location.href);
 }
 
 async function connectSpotifyClientCreds() {
@@ -179,7 +159,8 @@ async function loadPlaylistTracks(playlistId, playlistName) {
     if (!results) return;
     results.innerHTML = '<div style="text-align:center;padding:12px;color:#888;font-size:0.8rem;">Loading tracks...</div>';
     try {
-        const res = await fetch(`/api/spotify/playlist/${playlistId}/tracks`);
+        const sessionParam = spotifySession ? `?session=${spotifySession}` : '';
+        const res = await fetch(`/api/spotify/playlist/${playlistId}/tracks${sessionParam}`);
         const data = await res.json();
         const tracks = data.tracks || [];
         results.innerHTML = `<div style="font-size:0.7rem;color:#1DB954;margin:4px 0 8px;text-transform:uppercase;letter-spacing:1px;">${playlistName} (${tracks.length} tracks)</div>`;

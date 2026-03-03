@@ -1386,8 +1386,8 @@ async def get_spotify_token():
 @app.get("/api/spotify/search")
 async def spotify_search(q: str, type: str = "track", limit: int = 10, session: str = ""):
     """Search Spotify for tracks, artists, or albums."""
-    # Prefer user token if logged in, else fall back to client credentials
-    token = _spotify_user_sessions.get(session, {}).get("access_token") if session else None
+    # Prefer user token (with refresh) if logged in, else fall back to client credentials
+    token = await _spotify_get_token(session) if session else None
     if not token:
         token = await get_spotify_token()
     if not token:
@@ -1422,21 +1422,56 @@ async def spotify_search(q: str, type: str = "track", limit: int = 10, session: 
 
 # ── Spotify OAuth (User Login) ────────────────────────────────────────────
 
-_spotify_user_sessions = {}  # {session_id: {access_token, refresh_token, user}}
+_spotify_user_sessions = {}  # {session_id: {access_token, refresh_token, expires_at, user}}
 
 SPOTIFY_REDIRECT_URI = os.environ.get(
     "SPOTIFY_REDIRECT_URI", "https://simple-balance-demo.onrender.com/api/spotify/callback"
 )
 
 
+async def _spotify_get_token(session: str) -> str | None:
+    """Get a valid Spotify access token, refreshing if expired."""
+    sess = _spotify_user_sessions.get(session)
+    if not sess:
+        return None
+    # Check if token needs refresh (stored as epoch or countdown)
+    refresh_token = sess.get("refresh_token")
+    if not refresh_token:
+        return sess.get("access_token")
+    # Try refresh if we have one — Spotify tokens expire after 1 hour
+    # We refresh proactively on every API call to keep it simple
+    client_id = get_secret("SPOTIFY_CLIENT_ID")
+    client_secret = get_secret("SPOTIFY_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        return sess.get("access_token")
+    auth = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+    try:
+        async with httpx.AsyncClient() as http:
+            resp = await http.post(
+                "https://accounts.spotify.com/api/token",
+                headers={"Authorization": f"Basic {auth}", "Content-Type": "application/x-www-form-urlencoded"},
+                data={"grant_type": "refresh_token", "refresh_token": refresh_token},
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                sess["access_token"] = data["access_token"]
+                if data.get("refresh_token"):
+                    sess["refresh_token"] = data["refresh_token"]
+                return data["access_token"]
+    except Exception:
+        pass
+    return sess.get("access_token")
+
+
 @app.get("/api/spotify/login")
-async def spotify_login():
-    """Redirect to Spotify authorization page."""
+async def spotify_login(redirect_to: str = "/"):
+    """Redirect to Spotify authorization page (full-page, mobile-safe)."""
     client_id = get_secret("SPOTIFY_CLIENT_ID")
     if not client_id:
         return JSONResponse({"error": "Spotify not configured"}, status_code=503)
     scope = "user-read-private user-read-email playlist-read-private"
-    state = secrets.token_urlsafe(16)
+    # Encode the return URL in state so callback knows where to redirect back
+    state = base64.urlsafe_b64encode(redirect_to.encode()).decode().rstrip("=")
     params = urlencode({
         "client_id": client_id,
         "response_type": "code",
@@ -1448,13 +1483,20 @@ async def spotify_login():
 
 
 @app.get("/api/spotify/callback")
-async def spotify_callback(code: str = "", error: str = ""):
-    """Handle Spotify OAuth callback — exchange code for tokens, get user profile."""
+async def spotify_callback(code: str = "", error: str = "", state: str = ""):
+    """Handle Spotify OAuth callback — exchange code for tokens, redirect back."""
+    # Decode return URL from state
+    try:
+        return_url = base64.urlsafe_b64decode(state + "==").decode()
+    except Exception:
+        return_url = "/"
+    # Strip to path only for safety (prevent open redirect)
+    from urllib.parse import urlparse
+    parsed = urlparse(return_url)
+    return_path = parsed.path or "/"
+
     if error or not code:
-        return HTMLResponse(
-            "<html><body><script>if(window.opener){window.opener.postMessage({spotify_error:'"
-            + (error or "no_code") + "'},'*');window.close()}else{window.location.href='/'}</script></body></html>"
-        )
+        return RedirectResponse(return_path)
 
     client_id = get_secret("SPOTIFY_CLIENT_ID")
     client_secret = get_secret("SPOTIFY_CLIENT_SECRET")
@@ -1477,15 +1519,14 @@ async def spotify_callback(code: str = "", error: str = ""):
                 headers={"Authorization": f"Bearer {tokens['access_token']}"},
             )
             user = me_resp.json() if me_resp.status_code == 200 else {}
-    except Exception as e:
-        return HTMLResponse(
-            f"<html><body><script>if(window.opener){{window.opener.postMessage({{spotify_error:'auth_failed'}},'*');window.close()}}else{{window.location.href='/'}}</script></body></html>"
-        )
+    except Exception:
+        return RedirectResponse(return_path)
 
     session_id = secrets.token_urlsafe(32)
     _spotify_user_sessions[session_id] = {
         "access_token": tokens["access_token"],
         "refresh_token": tokens.get("refresh_token"),
+        "expires_at": tokens.get("expires_in", 3600),
         "user": {
             "id": user.get("id", ""),
             "name": user.get("display_name", "Spotify User"),
@@ -1495,17 +1536,9 @@ async def spotify_callback(code: str = "", error: str = ""):
         },
     }
 
-    # Return HTML that sends session to parent window (popup flow) or redirects (full-page flow)
-    return HTMLResponse(
-        f"""<!DOCTYPE html><html><body><script>
-if (window.opener) {{
-    window.opener.postMessage({{spotify_session: '{session_id}'}}, '*');
-    window.close();
-}} else {{
-    window.location.href = '/?spotify_session={session_id}';
-}}
-</script><p>Connecting to Spotify...</p></body></html>"""
-    )
+    # Redirect back to the app with session in URL
+    separator = "&" if "?" in return_path else "?"
+    return RedirectResponse(f"{return_path}{separator}spotify_session={session_id}")
 
 
 @app.get("/api/spotify/me")
@@ -1521,7 +1554,7 @@ async def spotify_user_playlists(session: str = ""):
     """Get the logged-in user's Spotify playlists."""
     if session not in _spotify_user_sessions:
         return JSONResponse({"error": "Not logged in"}, status_code=401)
-    token = _spotify_user_sessions[session]["access_token"]
+    token = await _spotify_get_token(session)
     async with httpx.AsyncClient() as http:
         resp = await http.get(
             "https://api.spotify.com/v1/me/playlists?limit=20",
@@ -1899,9 +1932,12 @@ async def spotify_user_playlists(user_id: str, limit: int = 20):
 
 
 @app.get("/api/spotify/playlist/{playlist_id}/tracks")
-async def spotify_playlist_tracks(playlist_id: str, limit: int = 50):
+async def spotify_playlist_tracks(playlist_id: str, limit: int = 50, session: str = ""):
     """Get tracks from a playlist with audio features for seeding."""
-    token = await get_spotify_token()
+    # Prefer user's OAuth token (can access private playlists), fall back to client creds
+    token = await _spotify_get_token(session) if session else None
+    if not token:
+        token = await get_spotify_token()
     if not token:
         return JSONResponse({"error": "Spotify not configured"}, status_code=503)
 
