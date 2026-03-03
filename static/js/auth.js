@@ -1,7 +1,7 @@
 /* ===== SIMPLE BALANCE MUSIC — AUTH MODULE ===== */
 
 const SUPABASE_URL = 'https://mprvtxmgnewfqzawpjvy.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_-DUm9kgx9ao9hdfwA5g-cA_iLDwTtQl';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1wcnZ0eG1nbmV3ZnF6YXdwanZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1MDYxNTEsImV4cCI6MjA4ODA4MjE1MX0.AIfMAno4Dep5wiT0JxRSW4HH-IY0x174PyruU80BavM';
 let supabaseClient = null;
 let currentUser = null;
 let _cachedAccessToken = null;
