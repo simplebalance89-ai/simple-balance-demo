@@ -1700,20 +1700,24 @@ async def spotify_recommendations(seed_genres: str = "", seed_artists: str = "",
 _tidal_token = {"access_token": None, "expires_at": datetime.min}
 
 
+_tidal_last_error = None  # Store last error for diagnostics
+
+
 async def get_tidal_token():
     """Get a Tidal access token using Client Credentials flow. Caches until expiry."""
-    global _tidal_token
+    global _tidal_token, _tidal_last_error
     if _tidal_token["access_token"] and datetime.now() < _tidal_token["expires_at"]:
         return _tidal_token["access_token"]
 
     client_id = get_secret("TIDAL_CLIENT_ID")
     client_secret = get_secret("TIDAL_CLIENT_SECRET")
     if not client_id or not client_secret:
+        _tidal_last_error = "TIDAL_CLIENT_ID or TIDAL_CLIENT_SECRET not set"
         return None
 
     try:
         auth = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.post(
                 "https://auth.tidal.com/v1/oauth2/token",
                 headers={
@@ -1726,12 +1730,15 @@ async def get_tidal_token():
             data = resp.json()
             _tidal_token["access_token"] = data["access_token"]
             _tidal_token["expires_at"] = datetime.now() + timedelta(seconds=data.get("expires_in", 86400) - 60)
+            _tidal_last_error = None
             return _tidal_token["access_token"]
     except httpx.HTTPStatusError as e:
-        print(f"[Tidal] Auth failed: {e.response.status_code} - {e.response.text[:500]}")
+        _tidal_last_error = f"HTTP {e.response.status_code}: {e.response.text[:500]}"
+        print(f"[Tidal] Auth failed: {_tidal_last_error}")
         return None
     except Exception as e:
-        print(f"[Tidal] Auth error: {type(e).__name__}: {e}")
+        _tidal_last_error = f"{type(e).__name__}: {e}"
+        print(f"[Tidal] Auth error: {_tidal_last_error}")
         return None
 
 
@@ -1773,14 +1780,33 @@ async def tidal_search_tracks(http, token, query, limit=3, country="US"):
         return []
 
 
+@app.get("/api/tidal/debug")
+async def tidal_debug():
+    """Diagnostic endpoint — test Tidal auth and return actual error."""
+    client_id = get_secret("TIDAL_CLIENT_ID")
+    client_secret = get_secret("TIDAL_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        return {"status": "no_credentials", "client_id_set": bool(client_id), "client_secret_set": bool(client_secret)}
+    # Force a fresh token attempt
+    global _tidal_token
+    _tidal_token = {"access_token": None, "expires_at": datetime.min}
+    token = await get_tidal_token()
+    return {
+        "status": "ok" if token else "auth_failed",
+        "token_obtained": bool(token),
+        "last_error": _tidal_last_error,
+        "client_id_prefix": client_id[:8] + "..." if client_id else None,
+    }
+
+
 @app.get("/api/tidal/search")
 async def tidal_search(q: str, limit: int = 10, countryCode: str = "US"):
     """Search Tidal catalog for tracks."""
     token = await get_tidal_token()
     if not token:
         has_creds = bool(get_secret("TIDAL_CLIENT_ID") and get_secret("TIDAL_CLIENT_SECRET"))
-        msg = "Tidal auth failed (credentials set but token request failed)" if has_creds else "Tidal not configured"
-        return JSONResponse({"error": msg, "configured": has_creds}, status_code=503)
+        msg = "Tidal auth failed" if has_creds else "Tidal not configured"
+        return JSONResponse({"error": msg, "configured": has_creds, "detail": _tidal_last_error}, status_code=503)
 
     async with httpx.AsyncClient(timeout=15) as http:
         results = await tidal_search_tracks(http, token, q, limit, countryCode)
