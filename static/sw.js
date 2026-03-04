@@ -1,8 +1,22 @@
-const CACHE_NAME = 'sbm-v1';
+const CACHE_NAME = 'sbm-v2';
+const SHELL_ASSETS = [
+  '/',
+  '/static/css/main.css',
+  '/static/js/utils.js',
+  '/static/js/auth.js',
+  '/static/js/spotify.js',
+  '/static/js/tidal.js',
+  '/static/js/tools.js',
+  '/static/js/profile.js',
+  '/static/js/library.js',
+  '/static/js/app.js',
+  '/static/icons/icon-192.png',
+  '/static/icons/icon-512.png'
+];
 
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.add('/'))
+    caches.open(CACHE_NAME).then(cache => cache.addAll(SHELL_ASSETS))
   );
   self.skipWaiting();
 });
@@ -25,30 +39,16 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // HTML: network first, cache fallback
-  if (request.headers.get('accept')?.includes('text/html')) {
-    event.respondWith(
-      fetch(request)
-        .then(response => {
+  // Network first, cache fallback (for everything else)
+  event.respondWith(
+    fetch(request)
+      .then(response => {
+        if (response.ok) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
-          return response;
-        })
-        .catch(() => caches.match(request))
-    );
-    return;
-  }
-
-  // Static assets: stale-while-revalidate
-  event.respondWith(
-    caches.open(CACHE_NAME).then(cache =>
-      cache.match(request).then(cached => {
-        const fetched = fetch(request).then(response => {
-          cache.put(request, response.clone());
-          return response;
-        });
-        return cached || fetched;
+        }
+        return response;
       })
-    )
+      .catch(() => caches.match(request))
   );
 });

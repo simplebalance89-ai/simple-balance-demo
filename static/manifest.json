@@ -1,13 +1,14 @@
 {
   "name": "Simple Balance Music",
-  "short_name": "SBM",
+  "short_name": "SB Music",
   "description": "AI-powered music production suite",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0a0a0a",
-  "theme_color": "#6366F1",
+  "orientation": "portrait",
+  "background_color": "#0D0D1A",
+  "theme_color": "#0D0D1A",
   "icons": [
-    { "src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+    { "src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }
