@@ -1,12 +1,45 @@
 /* ===== TIDAL — Connect & Search ===== */
 
 let tidalConnected = false;
+let tidalUserSession = null;
+
+// Check URL for tidal_session param (returned from OAuth callback)
+(function() {
+    const params = new URLSearchParams(window.location.search);
+    const sess = params.get('tidal_session');
+    if (sess) {
+        tidalUserSession = sess;
+        // Clean URL
+        params.delete('tidal_session');
+        const clean = params.toString();
+        window.history.replaceState({}, '', window.location.pathname + (clean ? '?' + clean : ''));
+    }
+})();
 
 async function connectTidal() {
     const card = document.getElementById('tidalCard');
     if (!card) return;
     card.style.opacity = '0.6';
     card.onclick = null;
+
+    // If we have a user session from OAuth, validate it
+    if (tidalUserSession) {
+        try {
+            const meRes = await fetch('/api/tidal/me?session=' + tidalUserSession);
+            if (meRes.ok) {
+                tidalConnected = true;
+                card.classList.add('connected');
+                card.style.opacity = '1';
+                card.querySelector('.cc-status').textContent = 'Connected (User)';
+                card.querySelector('.cc-status').style.color = '#00FFFF';
+                const lib = document.getElementById('tidalLibrary');
+                if (lib) lib.style.display = 'block';
+                return;
+            }
+        } catch (e) { /* fall through to client creds check */ }
+        tidalUserSession = null;
+    }
+
     try {
         const res = await fetch('/api/tidal/search?q=electronic&limit=1');
         if (res.ok) {
@@ -51,6 +84,10 @@ async function connectTidal() {
             card.querySelector('.cc-status').style.color = '#22c55e';
         }, 3000);
     }
+}
+
+function tidalUserLogin() {
+    window.location.href = '/api/tidal/login?redirect_to=' + encodeURIComponent(window.location.pathname);
 }
 
 async function tidalSearch() {

@@ -1,16 +1,19 @@
 import os
+import time
 import httpx
 from fastapi import Request, HTTPException
 from jose import jwt, JWTError
 
-# Cache the JWKS so we don't fetch it on every request
+# Cache the JWKS with a 1-hour TTL so key rotations are picked up
 _jwks_cache = None
+_jwks_cache_time = 0.0
+_JWKS_TTL = 3600  # seconds
 
 
 async def _get_jwks() -> dict | None:
-    """Fetch JWKS from Supabase for ES256 token validation (cached)."""
-    global _jwks_cache
-    if _jwks_cache:
+    """Fetch JWKS from Supabase for ES256 token validation (cached with TTL)."""
+    global _jwks_cache, _jwks_cache_time
+    if _jwks_cache and (time.time() - _jwks_cache_time) < _JWKS_TTL:
         return _jwks_cache
     supabase_url = os.environ.get("SUPABASE_URL")
     if not supabase_url:
@@ -20,6 +23,7 @@ async def _get_jwks() -> dict | None:
             resp = await client.get(f"{supabase_url}/auth/v1/.well-known/jwks.json")
             if resp.status_code == 200:
                 _jwks_cache = resp.json()
+                _jwks_cache_time = time.time()
                 return _jwks_cache
     except Exception:
         pass

@@ -1573,10 +1573,11 @@ async def spotify_callback(code: str = "", error: str = "", state: str = ""):
         return RedirectResponse(return_path)
 
     session_id = secrets.token_urlsafe(32)
+    expires_in = tokens.get("expires_in", 3600)
     _spotify_user_sessions[session_id] = {
         "access_token": tokens["access_token"],
         "refresh_token": tokens.get("refresh_token"),
-        "expires_at": tokens.get("expires_in", 3600),
+        "expires_at": (datetime.now() + timedelta(seconds=expires_in)).isoformat(),
         "user": {
             "id": user.get("id", ""),
             "name": user.get("display_name", "Spotify User"),
@@ -1645,7 +1646,7 @@ async def spotify_restore(request: Request):
         _spotify_user_sessions[session_id] = {
             "access_token": row["access_token"],
             "refresh_token": row.get("refresh_token"),
-            "expires_at": 3600,
+            "expires_at": row.get("expires_at", (datetime.now() + timedelta(seconds=3600)).isoformat()),
             "user": {
                 "id": row.get("spotify_user_id", ""),
                 "name": row.get("spotify_display_name", "Spotify User"),
@@ -1811,6 +1812,95 @@ async def tidal_search(q: str, limit: int = 10, countryCode: str = "US"):
     async with httpx.AsyncClient(timeout=15) as http:
         results = await tidal_search_tracks(http, token, q, limit, countryCode)
     return {"tracks": results}
+
+
+# ── Tidal OAuth (User Login) ─────────────────────────────────────────────────
+
+_tidal_user_sessions = {}  # {session_id: {access_token, refresh_token, expires_at}}
+
+TIDAL_REDIRECT_URI = os.environ.get(
+    "TIDAL_REDIRECT_URI", "https://simple-balance-demo.onrender.com/api/tidal/callback"
+)
+
+
+@app.get("/api/tidal/login")
+async def tidal_login(redirect_to: str = "/"):
+    """Redirect to Tidal authorization page for user OAuth."""
+    client_id = get_secret("TIDAL_CLIENT_ID")
+    if not client_id:
+        return JSONResponse({"error": "Tidal not configured"}, status_code=503)
+    state = base64.urlsafe_b64encode(redirect_to.encode()).decode().rstrip("=")
+    params = urlencode({
+        "client_id": client_id,
+        "response_type": "code",
+        "redirect_uri": TIDAL_REDIRECT_URI,
+        "scope": "user.read playlists.read collection.read",
+        "state": state,
+    })
+    return RedirectResponse(f"https://login.tidal.com/authorize?{params}")
+
+
+@app.get("/api/tidal/callback")
+async def tidal_callback(code: str = "", error: str = "", state: str = ""):
+    """Handle Tidal OAuth callback — exchange code for tokens."""
+    # Decode the return path from state
+    padding = 4 - len(state) % 4
+    if padding != 4:
+        state += "=" * padding
+    try:
+        return_path = base64.urlsafe_b64decode(state).decode()
+    except Exception:
+        return_path = "/"
+
+    if error or not code:
+        return RedirectResponse(return_path)
+
+    client_id = get_secret("TIDAL_CLIENT_ID")
+    client_secret = get_secret("TIDAL_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        return RedirectResponse(return_path)
+
+    auth = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+    try:
+        async with httpx.AsyncClient(timeout=15) as http:
+            resp = await http.post(
+                "https://auth.tidal.com/v1/oauth2/token",
+                headers={
+                    "Authorization": f"Basic {auth}",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                data={
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": TIDAL_REDIRECT_URI,
+                },
+            )
+            if resp.status_code != 200:
+                print(f"[Tidal OAuth] Token exchange failed: {resp.status_code} {resp.text[:500]}")
+                return RedirectResponse(return_path)
+            tokens = resp.json()
+    except Exception as e:
+        print(f"[Tidal OAuth] Error: {e}")
+        return RedirectResponse(return_path)
+
+    session_id = secrets.token_urlsafe(32)
+    expires_in = tokens.get("expires_in", 86400)
+    _tidal_user_sessions[session_id] = {
+        "access_token": tokens["access_token"],
+        "refresh_token": tokens.get("refresh_token"),
+        "expires_at": (datetime.now() + timedelta(seconds=expires_in)).isoformat(),
+    }
+
+    separator = "&" if "?" in return_path else "?"
+    return RedirectResponse(f"{return_path}{separator}tidal_session={session_id}")
+
+
+@app.get("/api/tidal/me")
+async def tidal_me(session: str = ""):
+    """Check if Tidal user session is valid."""
+    if session not in _tidal_user_sessions:
+        return JSONResponse({"error": "Not logged in", "logged_in": False}, status_code=401)
+    return {"logged_in": True}
 
 
 # ── AI-Powered Recommendations (Spotify + Tidal) ────────────────────────────
@@ -2426,6 +2516,30 @@ async def admin_summary():
 @app.get("/admin")
 async def admin_page():
     return FileResponse("static/admin.html")
+
+
+# ── Privacy Policy (required by Tidal developer portal) ──────────────────────
+
+@app.get("/privacy")
+async def privacy_policy():
+    return HTMLResponse("""<!DOCTYPE html><html><head><title>Privacy Policy — Simple Balance Music</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{font-family:system-ui,sans-serif;max-width:700px;margin:40px auto;padding:0 20px;color:#e0e0e0;background:#0a0a0a;line-height:1.6}h1{color:#00BFFF}h2{color:#ccc;margin-top:24px}a{color:#00BFFF}</style>
+</head><body>
+<h1>Privacy Policy</h1>
+<p><strong>Simple Balance Music</strong> — Last updated: March 2026</p>
+<h2>What We Collect</h2>
+<p>When you connect your Spotify or Tidal account, we access your public profile, playlists, and listening preferences solely to provide music recommendations and DJ set-building features.</p>
+<h2>How We Use It</h2>
+<p>Your data is used only within the app to power AI recommendations, search, and set curation. We do not sell, share, or transfer your data to third parties.</p>
+<h2>Storage</h2>
+<p>Session tokens are stored temporarily in server memory and in our Supabase database (encrypted at rest). You can disconnect at any time to revoke access.</p>
+<h2>Third-Party Services</h2>
+<p>We integrate with Spotify, Tidal, and Azure OpenAI. Each service has its own privacy policy governing data they process.</p>
+<h2>Contact</h2>
+<p>Questions? Email <a href="mailto:gcesintonia@gmail.com">gcesintonia@gmail.com</a></p>
+<p><a href="/">Back to app</a></p>
+</body></html>""")
 
 
 # ── Static + Health ───────────────────────────────────────────────────────────
