@@ -2029,7 +2029,7 @@ async def tidal_login(redirect_to: str = "/"):
         "client_id": client_id,
         "response_type": "code",
         "redirect_uri": TIDAL_REDIRECT_URI,
-        "scope": "user.read playlists.read collection.read",
+        "scope": "user.read collection.read collection.write search.read search.write playlists.read playlists.write entitlements.read playback recommendations.read",
         "state": state,
     })
     return RedirectResponse(f"https://login.tidal.com/authorize?{params}")
