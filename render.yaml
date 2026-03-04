@@ -25,6 +25,8 @@ services:
         sync: false
       - key: TIDAL_CLIENT_SECRET
         sync: false
+      - key: TIDAL_REDIRECT_URI
+        value: https://simple-balance-demo.onrender.com/api/tidal/callback
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_KEY

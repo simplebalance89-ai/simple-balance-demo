@@ -1399,6 +1399,7 @@ async def dashboard(request: Request):
 # ── Spotify (Client Credentials) ─────────────────────────────────────────────
 
 import base64
+import hashlib
 from datetime import datetime, timedelta
 
 _spotify_token = {"access_token": None, "expires_at": datetime.min}
@@ -1696,16 +1697,20 @@ async def spotify_recommendations(seed_genres: str = "", seed_artists: str = "",
     return await ai_recommendations(genre=genre, mood="", artist=artist, bpm=target_bpm, limit=limit)
 
 
-# ── Tidal (Client Credentials) ──────────────────────────────────────────────
+# ── Tidal OAuth (PKCE User Login + Client Credentials fallback) ──────────────
 
-_tidal_token = {"access_token": None, "expires_at": datetime.min}
+_tidal_user_sessions = {}  # {session_id: {access_token, refresh_token, expires_at, user, country}}
+_tidal_pkce_states = {}    # {state: {code_verifier, redirect_to, created_at}}
+_tidal_token = {"access_token": None, "expires_at": datetime.min}  # Client creds cache
+_tidal_last_error = None
+
+TIDAL_REDIRECT_URI = os.environ.get(
+    "TIDAL_REDIRECT_URI", "https://simple-balance-demo.onrender.com/api/tidal/callback"
+)
 
 
-_tidal_last_error = None  # Store last error for diagnostics
-
-
-async def get_tidal_token():
-    """Get a Tidal access token using Client Credentials flow. Caches until expiry."""
+async def get_tidal_client_token():
+    """Get a Tidal client credentials token (for catalog lookups by ID only)."""
     global _tidal_token, _tidal_last_error
     if _tidal_token["access_token"] and datetime.now() < _tidal_token["expires_at"]:
         return _tidal_token["access_token"]
@@ -1721,10 +1726,7 @@ async def get_tidal_token():
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.post(
                 "https://auth.tidal.com/v1/oauth2/token",
-                headers={
-                    "Authorization": f"Basic {auth}",
-                    "Content-Type": "application/x-www-form-urlencoded",
-                },
+                headers={"Authorization": f"Basic {auth}", "Content-Type": "application/x-www-form-urlencoded"},
                 data={"grant_type": "client_credentials"},
             )
             resp.raise_for_status()
@@ -1735,49 +1737,218 @@ async def get_tidal_token():
             return _tidal_token["access_token"]
     except httpx.HTTPStatusError as e:
         _tidal_last_error = f"HTTP {e.response.status_code}: {e.response.text[:500]}"
-        print(f"[Tidal] Auth failed: {_tidal_last_error}")
+        print(f"[Tidal] Client auth failed: {_tidal_last_error}")
         return None
     except Exception as e:
         _tidal_last_error = f"{type(e).__name__}: {e}"
-        print(f"[Tidal] Auth error: {_tidal_last_error}")
+        print(f"[Tidal] Client auth error: {_tidal_last_error}")
         return None
 
 
+async def _tidal_get_user_token(session: str) -> str | None:
+    """Get a valid Tidal user token, refreshing if expired."""
+    sess = _tidal_user_sessions.get(session)
+    if not sess:
+        return None
+    # Check if token is expired
+    if sess.get("expires_at") and datetime.now() >= sess["expires_at"]:
+        refresh_token = sess.get("refresh_token")
+        if not refresh_token:
+            del _tidal_user_sessions[session]
+            return None
+        # Refresh the token
+        client_id = get_secret("TIDAL_CLIENT_ID")
+        client_secret = get_secret("TIDAL_CLIENT_SECRET")
+        if not client_id or not client_secret:
+            return sess.get("access_token")
+        try:
+            auth = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+            async with httpx.AsyncClient(timeout=15) as http:
+                resp = await http.post(
+                    "https://auth.tidal.com/v1/oauth2/token",
+                    headers={"Authorization": f"Basic {auth}", "Content-Type": "application/x-www-form-urlencoded"},
+                    data={
+                        "grant_type": "refresh_token",
+                        "refresh_token": refresh_token,
+                        "client_id": client_id,
+                        "scope": "r_usr w_usr",
+                    },
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    sess["access_token"] = data["access_token"]
+                    if data.get("refresh_token"):
+                        sess["refresh_token"] = data["refresh_token"]
+                    sess["expires_at"] = datetime.now() + timedelta(seconds=data.get("expires_in", 86400) - 60)
+                    return data["access_token"]
+        except Exception:
+            pass
+    return sess.get("access_token")
+
+
+@app.get("/api/tidal/login")
+async def tidal_login(redirect_to: str = "/"):
+    """Redirect to Tidal authorization page (PKCE flow, mobile-safe)."""
+    client_id = get_secret("TIDAL_CLIENT_ID")
+    if not client_id:
+        return JSONResponse({"error": "Tidal not configured"}, status_code=503)
+
+    # Generate PKCE code verifier + challenge
+    code_verifier = base64.urlsafe_b64encode(os.urandom(32)).decode().rstrip("=")
+    code_challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(code_verifier.encode()).digest()
+    ).decode().rstrip("=")
+
+    # Store state → code_verifier mapping (cleaned up after 10 min)
+    state = secrets.token_urlsafe(32)
+    _tidal_pkce_states[state] = {
+        "code_verifier": code_verifier,
+        "redirect_to": redirect_to,
+        "created_at": time.time(),
+    }
+    # Clean up old states (> 10 min)
+    cutoff = time.time() - 600
+    for k in list(_tidal_pkce_states.keys()):
+        if _tidal_pkce_states[k]["created_at"] < cutoff:
+            del _tidal_pkce_states[k]
+
+    params = urlencode({
+        "client_id": client_id,
+        "response_type": "code",
+        "redirect_uri": TIDAL_REDIRECT_URI,
+        "scope": "r_usr w_usr",
+        "state": state,
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256",
+    })
+    return RedirectResponse(f"https://login.tidal.com/authorize?{params}")
+
+
+@app.get("/api/tidal/callback")
+async def tidal_callback(code: str = "", error: str = "", state: str = ""):
+    """Handle Tidal OAuth PKCE callback — exchange code for tokens, redirect back."""
+    pkce = _tidal_pkce_states.pop(state, None)
+    if not pkce:
+        return RedirectResponse("/?tidal_error=invalid_state")
+
+    return_url = pkce.get("redirect_to", "/")
+    from urllib.parse import urlparse
+    parsed = urlparse(return_url)
+    return_path = parsed.path or "/"
+
+    if error or not code:
+        return RedirectResponse(f"{return_path}?tidal_error={error or 'no_code'}")
+
+    client_id = get_secret("TIDAL_CLIENT_ID")
+    client_secret = get_secret("TIDAL_CLIENT_SECRET")
+    auth = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as http:
+            # Exchange code for tokens using PKCE
+            resp = await http.post(
+                "https://auth.tidal.com/v1/oauth2/token",
+                headers={"Authorization": f"Basic {auth}", "Content-Type": "application/x-www-form-urlencoded"},
+                data={
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": TIDAL_REDIRECT_URI,
+                    "client_id": client_id,
+                    "code_verifier": pkce["code_verifier"],
+                    "scope": "r_usr w_usr",
+                },
+            )
+            resp.raise_for_status()
+            tokens = resp.json()
+
+            # Get user info from Tidal
+            user = {}
+            country = "US"
+            try:
+                me_resp = await http.get(
+                    "https://api.tidal.com/v1/sessions",
+                    headers={"Authorization": f"Bearer {tokens['access_token']}"},
+                )
+                if me_resp.status_code == 200:
+                    session_data = me_resp.json()
+                    country = session_data.get("countryCode", "US")
+                    user_id = session_data.get("userId")
+                    if user_id:
+                        user_resp = await http.get(
+                            f"https://api.tidal.com/v1/users/{user_id}",
+                            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+                            params={"countryCode": country},
+                        )
+                        if user_resp.status_code == 200:
+                            user = user_resp.json()
+            except Exception as e:
+                print(f"[Tidal] User info fetch failed: {e}")
+
+    except Exception as e:
+        print(f"[Tidal] Token exchange failed: {e}")
+        return RedirectResponse(f"{return_path}?tidal_error=token_exchange_failed")
+
+    session_id = secrets.token_urlsafe(32)
+    _tidal_user_sessions[session_id] = {
+        "access_token": tokens["access_token"],
+        "refresh_token": tokens.get("refresh_token"),
+        "expires_at": datetime.now() + timedelta(seconds=tokens.get("expires_in", 86400) - 60),
+        "country": country,
+        "user": {
+            "id": user.get("userId", user.get("id", "")),
+            "name": user.get("firstName", user.get("username", "Tidal User")),
+        },
+    }
+
+    separator = "&" if "?" in return_path else "?"
+    return RedirectResponse(f"{return_path}{separator}tidal_session={session_id}")
+
+
+@app.get("/api/tidal/me")
+async def tidal_me(session: str = ""):
+    """Get current Tidal user info from session."""
+    sess = _tidal_user_sessions.get(session)
+    if not sess:
+        return JSONResponse({"error": "No session"}, status_code=401)
+    token = await _tidal_get_user_token(session)
+    if not token:
+        return JSONResponse({"error": "Session expired"}, status_code=401)
+    return {"user": sess.get("user", {}), "connected": True}
+
+
 async def tidal_search_tracks(http, token, query, limit=3, country="US"):
-    """Search Tidal for tracks. Returns list of simplified track objects."""
+    """Search Tidal for tracks using the v1 API (requires user auth token)."""
     try:
         resp = await http.get(
-            "https://openapi.tidal.com/search",
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/vnd.tidal.v1+json",
-            },
-            params={"query": query, "type": "TRACKS", "limit": limit, "countryCode": country},
+            "https://api.tidal.com/v1/search",
+            headers={"Authorization": f"Bearer {token}"},
+            params={"query": query, "types": "TRACKS", "limit": limit, "countryCode": country},
         )
         if resp.status_code != 200:
+            print(f"[Tidal] Search failed: {resp.status_code} {resp.text[:300]}")
             return []
         data = resp.json()
-        items = data.get("tracks", [])
-        if isinstance(items, dict):
-            items = items.get("items", [])
+        items = data.get("tracks", {}).get("items", [])
         results = []
         for item in items:
-            resource = item.get("resource", item)
-            artists = ", ".join(a.get("name", "") for a in resource.get("artists", []))
+            artists = ", ".join(a.get("name", "") for a in item.get("artists", []))
             cover = None
-            if resource.get("imageCover"):
-                covers = resource["imageCover"]
-                if isinstance(covers, list) and covers:
-                    cover = covers[0].get("url")
+            album = item.get("album", {})
+            if album.get("cover"):
+                cover_id = album["cover"].replace("-", "/")
+                cover = f"https://resources.tidal.com/images/{cover_id}/320x320.jpg"
             results.append({
-                "id": resource.get("id"),
-                "title": resource.get("title", ""),
+                "id": item.get("id"),
+                "title": item.get("title", ""),
                 "artist": artists,
-                "url": f"https://tidal.com/track/{resource.get('id', '')}",
+                "url": f"https://tidal.com/track/{item.get('id', '')}",
+                "album": album.get("title", ""),
                 "album_art": cover,
+                "duration": item.get("duration", 0),
             })
         return results
-    except Exception:
+    except Exception as e:
+        print(f"[Tidal] Search error: {e}")
         return []
 
 
@@ -1788,30 +1959,54 @@ async def tidal_debug():
     client_secret = get_secret("TIDAL_CLIENT_SECRET")
     if not client_id or not client_secret:
         return {"status": "no_credentials", "client_id_set": bool(client_id), "client_secret_set": bool(client_secret)}
-    # Force a fresh token attempt
     global _tidal_token
     _tidal_token = {"access_token": None, "expires_at": datetime.min}
-    token = await get_tidal_token()
+    token = await get_tidal_client_token()
+    active_sessions = len(_tidal_user_sessions)
     return {
         "status": "ok" if token else "auth_failed",
-        "token_obtained": bool(token),
+        "client_token_obtained": bool(token),
+        "active_user_sessions": active_sessions,
         "last_error": _tidal_last_error,
         "client_id_prefix": client_id[:8] + "..." if client_id else None,
+        "redirect_uri": TIDAL_REDIRECT_URI,
+        "note": "Search requires user OAuth login via /api/tidal/login",
     }
 
 
 @app.get("/api/tidal/search")
-async def tidal_search(q: str, limit: int = 10, countryCode: str = "US"):
-    """Search Tidal catalog for tracks."""
-    token = await get_tidal_token()
-    if not token:
-        has_creds = bool(get_secret("TIDAL_CLIENT_ID") and get_secret("TIDAL_CLIENT_SECRET"))
-        msg = "Tidal auth failed" if has_creds else "Tidal not configured"
-        return JSONResponse({"error": msg, "configured": has_creds, "detail": _tidal_last_error}, status_code=503)
+async def tidal_search(q: str, limit: int = 10, countryCode: str = "US", session: str = ""):
+    """Search Tidal catalog for tracks. Requires user OAuth session."""
+    # Try user session first (required for search)
+    if session:
+        token = await _tidal_get_user_token(session)
+        sess = _tidal_user_sessions.get(session)
+        if token:
+            country = sess.get("country", countryCode) if sess else countryCode
+            async with httpx.AsyncClient(timeout=15) as http:
+                results = await tidal_search_tracks(http, token, q, limit, country)
+            return {"tracks": results}
 
-    async with httpx.AsyncClient(timeout=15) as http:
-        results = await tidal_search_tracks(http, token, q, limit, countryCode)
-    return {"tracks": results}
+    # No user session — check if any sessions exist
+    if _tidal_user_sessions:
+        # Use the most recent session
+        latest_session = list(_tidal_user_sessions.keys())[-1]
+        token = await _tidal_get_user_token(latest_session)
+        sess = _tidal_user_sessions.get(latest_session)
+        if token:
+            country = sess.get("country", countryCode) if sess else countryCode
+            async with httpx.AsyncClient(timeout=15) as http:
+                results = await tidal_search_tracks(http, token, q, limit, country)
+            return {"tracks": results}
+
+    # No user sessions at all — tell frontend to login
+    has_creds = bool(get_secret("TIDAL_CLIENT_ID") and get_secret("TIDAL_CLIENT_SECRET"))
+    return JSONResponse({
+        "error": "Tidal login required",
+        "configured": has_creds,
+        "needs_login": True,
+        "detail": "Search requires Tidal user login. Click Connect to sign in.",
+    }, status_code=401)
 
 
 # ── Tidal OAuth (User Login) ─────────────────────────────────────────────────
@@ -1959,7 +2154,13 @@ async def ai_recommendations(genre: str = "", mood: str = "", artist: str = "",
 
     # Enrich with Spotify + Tidal links
     spotify_token = await get_spotify_token()
-    tidal_token = await get_tidal_token()
+    # Try to get a Tidal user token for search enrichment
+    tidal_token = None
+    tidal_country = "US"
+    if _tidal_user_sessions:
+        latest_sid = list(_tidal_user_sessions.keys())[-1]
+        tidal_token = await _tidal_get_user_token(latest_sid)
+        tidal_country = _tidal_user_sessions.get(latest_sid, {}).get("country", "US")
     enriched = []
 
     async with httpx.AsyncClient(timeout=15) as http:
@@ -1997,9 +2198,9 @@ async def ai_recommendations(genre: str = "", mood: str = "", artist: str = "",
                 except Exception:
                     pass
 
-            # Tidal search
+            # Tidal search (requires user OAuth session)
             if tidal_token:
-                tidal_results = await tidal_search_tracks(http, tidal_token, query, limit=1)
+                tidal_results = await tidal_search_tracks(http, tidal_token, query, limit=1, country=tidal_country)
                 if tidal_results:
                     entry["tidal"] = tidal_results[0]
 
@@ -2197,7 +2398,13 @@ async def build_profile(payload: dict, request: Request):
     recs = result.get("recommendations", [])
     if result.get("_source") != "spotify_fallback":
         spotify_token = await get_spotify_token()
-        tidal_token = await get_tidal_token()
+        # Try Tidal user session for search enrichment
+        tidal_token = None
+        tidal_country = "US"
+        if _tidal_user_sessions:
+            latest_sid = list(_tidal_user_sessions.keys())[-1]
+            tidal_token = await _tidal_get_user_token(latest_sid)
+            tidal_country = _tidal_user_sessions.get(latest_sid, {}).get("country", "US")
 
         if recs and (spotify_token or tidal_token):
             async with httpx.AsyncClient(timeout=15) as http:
@@ -2223,7 +2430,7 @@ async def build_profile(payload: dict, request: Request):
                         except Exception:
                             pass
                     if tidal_token:
-                        tidal_results = await tidal_search_tracks(http, tidal_token, query, limit=1)
+                        tidal_results = await tidal_search_tracks(http, tidal_token, query, limit=1, country=tidal_country)
                         if tidal_results:
                             rec["tidal"] = tidal_results[0]
 
