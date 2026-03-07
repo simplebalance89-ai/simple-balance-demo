@@ -58,6 +58,36 @@ function analyzeAudioLocal(file) {
     });
 }
 
+/* ===== SHARE TO CREW ===== */
+function shareTrackToCrew(encodedTitle, encodedArtist) {
+    var title = decodeURIComponent(encodedTitle);
+    var artist = decodeURIComponent(encodedArtist);
+    var text = title + ' by ' + artist;
+
+    // Try native share first (mobile)
+    if (navigator.share) {
+        navigator.share({ title: 'Check this track', text: text }).catch(function() {});
+        return;
+    }
+
+    // Fallback: copy to clipboard + post to crew feed
+    navigator.clipboard.writeText(text).then(function() {
+        sbmToast('Copied to clipboard: ' + text, 'success');
+    }).catch(function() {
+        sbmToast('Share: ' + text, 'info');
+    });
+
+    // Post to crew feed if available
+    var token = localStorage.getItem('sbmToken');
+    if (token) {
+        fetch('/api/crew/share', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Crew-Token': token },
+            body: JSON.stringify({ type: 'track', title: title, artist: artist })
+        }).catch(function() {});
+    }
+}
+
 /* ===== EXPERIENCE BUILDERS ===== */
 
 /* --- JAW DJ Command (Chat) --- */
@@ -391,6 +421,7 @@ function renderDiscoveryTracks(container, tracks, isAI) {
             '<div class="track-meta">' +
                 '<div class="tm-bpm">' + (t.bpm || '?') + ' BPM</div>' +
                 '<div>' + (t.key || '?') + '</div>' +
+                '<div onclick="event.stopPropagation();shareTrackToCrew(\'' + encodeURIComponent(t.title || t.name || '') + '\',\'' + encodeURIComponent(t.artist || '') + '\')" style="margin-top:4px;cursor:pointer;font-size:0.6rem;color:#D4A017;background:rgba(212,160,23,0.1);padding:2px 8px;border-radius:6px;text-align:center;">📤 Share</div>' +
             '</div>' +
         '</div>';
     }).join('');
