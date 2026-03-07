@@ -17,7 +17,7 @@ const MODE_NAMES = {
     setbuilder: 'Set Builder',
     archive: 'Mix Archive',
     digestor: 'Mix Digestor',
-    shazam: 'Track ID',
+    shazam: 'Live ID',
     tools: 'Producer Tools',
     dashboard: 'Dashboard'
 };
@@ -331,7 +331,7 @@ function renderStudioTab(app) {
             ${featureCard('mastering', '🎚️', 'AI Mastering', 'Upload and analyze your tracks')}
             ${featureCard('stems', '🔀', 'Stem Separation', 'Split tracks into vocals, drums, bass')}
             ${featureCard('digestor', '🔬', 'Mix Digestor', 'Extract tracklists from DJ mixes')}
-            ${featureCard('shazam', '🎵', 'Track ID', 'Identify any song with AI')}
+            ${featureCard('shazam', '🎧', 'Live ID', 'Hold up your phone — we\'ll name that track')}
             ${featureCard('generation', '🎹', 'AI Generation', 'Generate beats and patterns')}
             ${featureCard('tools', '🛠️', 'Producer Tools', 'Music theory and production Q&A')}
         </div>
