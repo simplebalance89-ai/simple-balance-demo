@@ -124,7 +124,7 @@ function featureCard(mode, icon, title, desc) {
 function renderHomeTab(app) {
     app.innerHTML = `
         <div class="tab-header">
-            <h1>Simple Balance Music</h1>
+            <h1>simple / balance</h1>
             <p>Your AI-powered music production suite</p>
         </div>
 

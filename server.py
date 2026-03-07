@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 _SERVER_START_TIME = time.time()
 
-app = FastAPI(title="Simple Balance Music")
+app = FastAPI(title="simple / balance")
 
 # ── YouTube Cookies (decoded from env var at startup) ─────────────────────────
 COOKIES_PATH = "/tmp/yt_cookies.txt"
@@ -76,7 +76,7 @@ def get_ai_client():
 
 # ── JAW System Prompt (2026 Unified Build) ────────────────────────────────────
 
-JAW_SYSTEM_PROMPT = """You are J.A.W. (Just Add Wax) — the personal DJ intelligence and melodic techno discovery engine for Simple Balance Music.
+JAW_SYSTEM_PROMPT = """You are J.A.W. (Just Add Wax) — the personal DJ intelligence and melodic techno discovery engine for simple / balance.
 
 ## CORE IDENTITY
 - Role: Track digging advisor, set builder, harmonic mixing guide, energy flow guardian
@@ -1350,7 +1350,7 @@ async def generate(payload: dict):
 
     model = get_secret("AZURE_OPENAI_MODEL", "gpt-4o")
     system_prompt = (
-        "You are an expert music producer and sound designer for Simple Balance Music. "
+        "You are an expert music producer and sound designer for simple / balance. "
         "When given a genre, BPM, and key, generate a detailed musical description and structure. "
         "Respond ONLY with valid JSON (no markdown, no code fences) with these fields: "
         "name (creative track name), bpm (int), key (string), bars (int), "
@@ -1497,7 +1497,7 @@ async def tools_analyze(payload: dict):
 
     model = get_secret("AZURE_OPENAI_MODEL", "gpt-4o")
     system_prompt = (
-        "You are a world-class music theory expert and production mentor for Simple Balance Music. "
+        "You are a world-class music theory expert and production mentor for simple / balance. "
         "You specialize in electronic music production, DJ techniques, harmonic theory, sound design, "
         "mixing, mastering, and arrangement. Give concise, practical answers. "
         "Use examples when helpful. Reference scales, chords, and frequencies when relevant."
@@ -2194,7 +2194,7 @@ async def ai_recommendations(genre: str = "", mood: str = "", artist: str = "",
     context = ", ".join(context_parts)
 
     system_prompt = (
-        "You are J.A.W., the recommendation engine for Simple Balance Music. "
+        "You are J.A.W., the recommendation engine for simple / balance. "
         "Sound focus: 2023–2026 cinematic / hybrid melodic techno. "
         "Tier 1 (priority): Son of Son, Aladag, HNTR, Fezzo, Ivory, Oppaacha — labels: Running Clouds, Oddity, Siona, Radikon, Eklektisch. "
         "Tier 2: Rafael Cerato, Dyzen, 8Kays, Argy, Fideles. Tier 3 (legacy): Massano, Colyn, Anyma, Innellea, Adriatique. "
@@ -2552,7 +2552,7 @@ async def build_profile(payload: dict, request: Request):
         favorites_text = json.dumps(favorites[:20], indent=2)
 
         system_prompt = (
-            "You are a music taste analyst for Simple Balance Music. Given a list of favorite songs/artists, "
+            "You are a music taste analyst for simple / balance. Given a list of favorite songs/artists, "
             "analyze the user's taste and generate a profile with 10 track recommendations. "
             "Return ONLY valid JSON:\n"
             '{"profile": {"genres": ["top 5 genres"], "energy_level": "high/medium/low", '
@@ -2808,7 +2808,7 @@ async def analyze_profile(payload: dict):
     }, indent=2)
 
     system_prompt = (
-        "You are a music taste analyst for Simple Balance Music. Given a user's listening data, "
+        "You are a music taste analyst for simple / balance. Given a user's listening data, "
         "generate a taste profile. Return ONLY valid JSON with this exact structure:\n"
         '{"genres": ["top 5 genres"], "energy_level": "high/medium/low", '
         '"bpm_range": {"min": number, "max": number}, '
@@ -2921,12 +2921,12 @@ async def admin_page():
 
 @app.get("/privacy")
 async def privacy_policy():
-    return HTMLResponse("""<!DOCTYPE html><html><head><title>Privacy Policy — Simple Balance Music</title>
+    return HTMLResponse("""<!DOCTYPE html><html><head><title>Privacy Policy — simple / balance</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>body{font-family:system-ui,sans-serif;max-width:700px;margin:40px auto;padding:0 20px;color:#e0e0e0;background:#0a0a0a;line-height:1.6}h1{color:#00BFFF}h2{color:#ccc;margin-top:24px}a{color:#00BFFF}</style>
 </head><body>
 <h1>Privacy Policy</h1>
-<p><strong>Simple Balance Music</strong> — Last updated: March 2026</p>
+<p><strong>simple / balance</strong> — Last updated: March 2026</p>
 <h2>What We Collect</h2>
 <p>When you connect your Spotify or Tidal account, we access your public profile, playlists, and listening preferences solely to provide music recommendations and DJ set-building features.</p>
 <h2>How We Use It</h2>

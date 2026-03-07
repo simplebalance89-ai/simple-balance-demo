@@ -1,6 +1,6 @@
 {
-  "name": "Simple Balance Music",
-  "short_name": "SB Music",
+  "name": "simple / balance",
+  "short_name": "s / b",
   "description": "AI-powered music production suite",
   "start_url": "/",
   "display": "standalone",
