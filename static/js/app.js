@@ -207,6 +207,8 @@ function renderHomeContent() {
         return list.map(function(f) {
             var statusBadge = f.status === 'live'
                 ? '<span class="feature-badge feature-badge-live">Live</span>'
+                : f.status === 'new'
+                ? '<span class="feature-badge feature-badge-new">New</span>'
                 : '<span class="feature-badge feature-badge-testing">Testing</span>';
             return '<div class="feature-card" onclick="selectTool(\'' + f.mode + '\')">' +
                 '<span class="feature-card-icon">' + f.icon + '</span>' +
