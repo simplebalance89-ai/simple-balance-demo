@@ -19,7 +19,9 @@ const MODE_NAMES = {
     digestor: 'Digestor',
     shazam: 'Live ID',
     tools: 'Tools',
-    dashboard: 'Dashboard'
+    dashboard: 'Dashboard',
+    presskit: 'Press Kit',
+    samples: 'Samples'
 };
 
 const API_REQUIREMENTS = {
@@ -46,6 +48,8 @@ var TOOL_TABS = [
     { mode: 'stems',     icon: '🔀', label: 'Stems' },
     { mode: 'events',    icon: '📍', label: 'Events' },
     { mode: 'setbuilder',icon: '📋', label: 'Sets' },
+    { mode: 'presskit',  icon: '📋', label: 'EPK' },
+    { mode: 'samples',   icon: '🎙️', label: 'Samples' },
     { mode: 'tools',     icon: '🛠️', label: 'Tools' }
 ];
 
@@ -179,6 +183,8 @@ function buildExperienceInto(area) {
     else if (selectedMode === 'events') area.innerHTML = buildEventsExperience(name, modeName);
     else if (selectedMode === 'setbuilder') area.innerHTML = buildSetBuilderExperience(name, modeName);
     else if (selectedMode === 'archive') { area.innerHTML = buildArchiveExperience(name, modeName); loadArchiveList(); }
+    else if (selectedMode === 'presskit') area.innerHTML = buildPressKitExperience(name, modeName);
+    else if (selectedMode === 'samples') { area.innerHTML = buildSampleSaverExperience(name, modeName); renderSampleList(); }
     else if (selectedMode === 'tools') area.innerHTML = buildToolsExperience(name, modeName);
     else if (selectedMode === 'dashboard') { area.innerHTML = buildDashboardExperience(name, modeName); loadDashboardStats(); }
     else area.innerHTML = buildDefaultExperience(name, modeName);
@@ -213,7 +219,9 @@ function renderHomeContent() {
     // Profile lane — things that build your identity
     var profileTools = [
         { mode: 'discovery', icon: '🧭', name: 'Discover', desc: 'Mood-based AI track recommendations', status: 'live' },
-        { mode: 'events', icon: '📍', name: 'Events', desc: 'Upcoming shows and festivals near you', status: 'testing' }
+        { mode: 'events', icon: '📍', name: 'Events', desc: 'Upcoming shows and festivals near you', status: 'testing' },
+        { mode: 'presskit', icon: '📋', name: 'Press Kit', desc: 'Build your EPK for bookings and promos', status: 'new' },
+        { mode: 'samples', icon: '🎙️', name: 'Samples', desc: 'Record, tag, and auto-ID audio samples', status: 'new' }
     ];
 
     // Studio lane — production & performance tools

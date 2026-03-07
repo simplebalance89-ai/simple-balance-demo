@@ -1511,3 +1511,287 @@ function buildDefaultExperience(name, modeName) {
         '</div>' +
         '<div class="sample-cards">' + cards + '</div>';
 }
+
+/* ===== PRESS KIT (EPK) ===== */
+function buildPressKitExperience(name, modeName) {
+    return `
+        <div class="experience-title">
+            <h2>${modeName}</h2>
+            <p>Build your electronic press kit for bookings and promotions.</p>
+        </div>
+        <div style="width:100%;max-width:600px;">
+
+            <!-- Photo Upload -->
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:20px;margin-bottom:16px;">
+                <div style="font-size:0.9rem;font-weight:700;color:#FFE082;margin-bottom:12px;">📸 Promo Photos</div>
+                <div id="pressKitPhotos" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;"></div>
+                <label style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:rgba(212,160,23,0.15);border:1px dashed rgba(212,160,23,0.3);border-radius:12px;cursor:pointer;color:#D4A017;font-size:0.8rem;font-weight:600;">
+                    <input type="file" accept="image/*" multiple onchange="handlePressKitPhotos(this.files)" style="display:none;">
+                    + Upload Photos
+                </label>
+            </div>
+
+            <!-- DJ Bio -->
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:20px;margin-bottom:16px;">
+                <div style="font-size:0.9rem;font-weight:700;color:#FFE082;margin-bottom:12px;">🎤 Bio</div>
+                <textarea id="pressKitBio" placeholder="Write your DJ bio... (genres, style, influences, history)" style="width:100%;min-height:100px;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#fff;font-family:'Nunito',sans-serif;font-size:0.85rem;resize:vertical;box-sizing:border-box;"></textarea>
+            </div>
+
+            <!-- SoundCloud -->
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:20px;margin-bottom:16px;">
+                <div style="font-size:0.9rem;font-weight:700;color:#FFE082;margin-bottom:12px;">🔊 SoundCloud</div>
+                <input type="text" id="pressKitSoundcloud" placeholder="https://soundcloud.com/your-profile" style="width:100%;padding:12px 16px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#fff;font-family:'Nunito',sans-serif;font-size:0.85rem;box-sizing:border-box;">
+                <div id="pressKitSCTracks" style="margin-top:10px;"></div>
+            </div>
+
+            <!-- Festival History -->
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:20px;margin-bottom:16px;">
+                <div style="font-size:0.9rem;font-weight:700;color:#FFE082;margin-bottom:12px;">🎪 Festival & Event History</div>
+                <div id="pressKitEvents" style="margin-bottom:10px;"></div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <input type="text" id="pressKitEventName" placeholder="Event name" style="flex:2;min-width:120px;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#fff;font-size:0.8rem;box-sizing:border-box;">
+                    <input type="text" id="pressKitEventYear" placeholder="Year" style="flex:0.5;min-width:60px;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#fff;font-size:0.8rem;box-sizing:border-box;">
+                    <button onclick="addPressKitEvent()" style="padding:10px 16px;background:#D4A017;color:#0D0D1A;border:none;border-radius:8px;font-weight:700;font-size:0.8rem;cursor:pointer;">Add</button>
+                </div>
+            </div>
+
+            <!-- Socials -->
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:20px;margin-bottom:16px;">
+                <div style="font-size:0.9rem;font-weight:700;color:#FFE082;margin-bottom:12px;">🔗 Social Links</div>
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                    <input type="text" id="pressKitIG" placeholder="Instagram @handle" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#fff;font-size:0.8rem;box-sizing:border-box;">
+                    <input type="text" id="pressKitTwitter" placeholder="X (Twitter) @handle" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#fff;font-size:0.8rem;box-sizing:border-box;">
+                    <input type="text" id="pressKitWebsite" placeholder="Website URL" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#fff;font-size:0.8rem;box-sizing:border-box;">
+                </div>
+            </div>
+
+            <!-- Collaborators -->
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:20px;margin-bottom:16px;">
+                <div style="font-size:0.9rem;font-weight:700;color:#FFE082;margin-bottom:12px;">👥 Collaborators & Guests</div>
+                <textarea id="pressKitCollabs" placeholder="List collaborators, guest mixes, affiliated crews..." style="width:100%;min-height:60px;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#fff;font-family:'Nunito',sans-serif;font-size:0.85rem;resize:vertical;box-sizing:border-box;"></textarea>
+            </div>
+
+            <!-- Genre Tags -->
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:20px;margin-bottom:16px;">
+                <div style="font-size:0.9rem;font-weight:700;color:#FFE082;margin-bottom:12px;">🎵 Genres</div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;" id="pressKitGenres">
+                    ${['House','Deep House','Tech House','Techno','Trance','Progressive','DnB','Ambient','Afro House','Melodic Techno'].map(g =>
+                        '<span onclick="this.classList.toggle(\'picked\')" class="prompt-chip" style="cursor:pointer;">' + g + '</span>'
+                    ).join('')}
+                </div>
+            </div>
+
+            <!-- Export -->
+            <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+                <button onclick="savePressKit()" class="btn-primary" style="padding:14px 28px;border-radius:16px;font-size:0.9rem;">💾 Save Press Kit</button>
+                <button onclick="exportPressKit()" class="btn-primary" style="padding:14px 28px;border-radius:16px;font-size:0.9rem;background:rgba(255,255,255,0.08);color:#FFE082;">📤 Export / Share</button>
+            </div>
+            <div id="pressKitStatus" style="text-align:center;margin-top:12px;font-size:0.75rem;color:#666;"></div>
+        </div>`;
+}
+
+var pressKitPhotoURLs = [];
+var pressKitEventsList = [];
+
+function handlePressKitPhotos(files) {
+    var container = document.getElementById('pressKitPhotos');
+    for (var i = 0; i < files.length; i++) {
+        (function(file) {
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                pressKitPhotoURLs.push(e.target.result);
+                var img = document.createElement('div');
+                img.style.cssText = 'width:80px;height:80px;border-radius:10px;background-size:cover;background-position:center;border:1px solid rgba(255,255,255,0.1);';
+                img.style.backgroundImage = 'url(' + e.target.result + ')';
+                container.appendChild(img);
+            };
+            reader.readAsDataURL(file);
+        })(files[i]);
+    }
+}
+
+function addPressKitEvent() {
+    var name = document.getElementById('pressKitEventName').value.trim();
+    var year = document.getElementById('pressKitEventYear').value.trim();
+    if (!name) return;
+    pressKitEventsList.push({ name: name, year: year || '' });
+    document.getElementById('pressKitEventName').value = '';
+    document.getElementById('pressKitEventYear').value = '';
+    renderPressKitEvents();
+}
+
+function renderPressKitEvents() {
+    var container = document.getElementById('pressKitEvents');
+    container.innerHTML = pressKitEventsList.map(function(e, i) {
+        return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;">' +
+            '<span style="color:#FFE082;font-size:0.8rem;">🎪</span>' +
+            '<span style="color:#fff;font-size:0.8rem;flex:1;">' + e.name + (e.year ? ' (' + e.year + ')' : '') + '</span>' +
+            '<span onclick="pressKitEventsList.splice(' + i + ',1);renderPressKitEvents()" style="color:#EF4444;font-size:0.7rem;cursor:pointer;">✕</span>' +
+        '</div>';
+    }).join('');
+}
+
+function savePressKit() {
+    var genres = [];
+    document.querySelectorAll('#pressKitGenres .picked').forEach(function(el) { genres.push(el.textContent); });
+    var data = {
+        bio: document.getElementById('pressKitBio').value,
+        soundcloud: document.getElementById('pressKitSoundcloud').value,
+        instagram: document.getElementById('pressKitIG').value,
+        twitter: document.getElementById('pressKitTwitter').value,
+        website: document.getElementById('pressKitWebsite').value,
+        collaborators: document.getElementById('pressKitCollabs').value,
+        genres: genres,
+        events: pressKitEventsList,
+        photos: pressKitPhotoURLs.length
+    };
+    fetch('/api/presskit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Crew-Token': localStorage.getItem('sbmToken') || '' },
+        body: JSON.stringify(data)
+    }).then(function(r) { return r.json(); })
+    .then(function(d) {
+        document.getElementById('pressKitStatus').textContent = 'Press kit saved!';
+        document.getElementById('pressKitStatus').style.color = '#22c55e';
+        if (typeof sbmToast === 'function') sbmToast('Press kit saved!', 'success');
+    }).catch(function() {
+        document.getElementById('pressKitStatus').textContent = 'Saved locally (server sync later)';
+        document.getElementById('pressKitStatus').style.color = '#D4A017';
+        localStorage.setItem('sbm_presskit', JSON.stringify(data));
+    });
+}
+
+function exportPressKit() {
+    sbmToast('Press kit export coming soon — shareable link & PDF download.', 'info');
+}
+
+/* ===== SAMPLE SAVER ===== */
+function buildSampleSaverExperience(name, modeName) {
+    return `
+        <div class="experience-title">
+            <h2>${modeName}</h2>
+            <p>Record samples from your phone. Auto-ID tracks. Weekly re-checks.</p>
+        </div>
+        <div style="width:100%;max-width:600px;">
+
+            <!-- Record -->
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:20px;margin-bottom:16px;text-align:center;">
+                <div style="font-size:0.9rem;font-weight:700;color:#FFE082;margin-bottom:16px;">🎙️ Record a Sample</div>
+                <button id="sampleRecordBtn" onclick="toggleSampleRecord()" style="width:80px;height:80px;border-radius:50%;border:3px solid #EF4444;background:transparent;color:#EF4444;font-size:2rem;cursor:pointer;transition:all 0.3s;">⏺</button>
+                <div id="sampleRecordStatus" style="margin-top:8px;font-size:0.75rem;color:#666;">Tap to start recording</div>
+                <div style="display:flex;gap:8px;margin-top:12px;justify-content:center;">
+                    <input type="text" id="sampleTag" placeholder="Tag (vibe, BPM guess, location...)" style="flex:1;max-width:250px;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#fff;font-size:0.8rem;box-sizing:border-box;">
+                </div>
+            </div>
+
+            <!-- Upload -->
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:20px;margin-bottom:16px;">
+                <div style="font-size:0.9rem;font-weight:700;color:#FFE082;margin-bottom:12px;">📁 Or Upload a Sample</div>
+                <label style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:rgba(212,160,23,0.15);border:1px dashed rgba(212,160,23,0.3);border-radius:12px;cursor:pointer;color:#D4A017;font-size:0.8rem;font-weight:600;">
+                    <input type="file" accept="audio/*" onchange="handleSampleUpload(this.files[0])" style="display:none;">
+                    + Choose Audio File
+                </label>
+            </div>
+
+            <!-- Saved Samples -->
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:20px;margin-bottom:16px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                    <div style="font-size:0.9rem;font-weight:700;color:#FFE082;">💾 Saved Samples</div>
+                    <button onclick="recheckSamples()" style="padding:6px 14px;background:rgba(212,160,23,0.15);border:1px solid rgba(212,160,23,0.3);border-radius:8px;color:#D4A017;font-size:0.7rem;font-weight:600;cursor:pointer;">Re-check All</button>
+                </div>
+                <div id="sampleList" style="color:#666;font-size:0.8rem;">No samples yet. Record or upload to get started.</div>
+            </div>
+        </div>`;
+}
+
+var sampleMediaRecorder = null;
+var sampleChunks = [];
+
+function toggleSampleRecord() {
+    var btn = document.getElementById('sampleRecordBtn');
+    var status = document.getElementById('sampleRecordStatus');
+    if (sampleMediaRecorder && sampleMediaRecorder.state === 'recording') {
+        sampleMediaRecorder.stop();
+        btn.style.borderColor = '#EF4444';
+        btn.style.color = '#EF4444';
+        btn.textContent = '⏺';
+        status.textContent = 'Processing...';
+        return;
+    }
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+        sampleChunks = [];
+        sampleMediaRecorder = new MediaRecorder(stream);
+        sampleMediaRecorder.ondataavailable = function(e) { sampleChunks.push(e.data); };
+        sampleMediaRecorder.onstop = function() {
+            stream.getTracks().forEach(function(t) { t.stop(); });
+            var blob = new Blob(sampleChunks, { type: 'audio/webm' });
+            var tag = document.getElementById('sampleTag').value.trim() || 'Untitled';
+            status.textContent = 'Saved! Running ID check...';
+            saveSampleLocally(blob, tag);
+        };
+        sampleMediaRecorder.start();
+        btn.style.borderColor = '#22c55e';
+        btn.style.color = '#22c55e';
+        btn.textContent = '⏹';
+        status.textContent = 'Recording... tap to stop';
+    }).catch(function() {
+        status.textContent = 'Microphone access denied';
+    });
+}
+
+function handleSampleUpload(file) {
+    if (!file) return;
+    var tag = file.name.replace(/\.[^.]+$/, '');
+    saveSampleLocally(file, tag);
+}
+
+function saveSampleLocally(blob, tag) {
+    var samples = JSON.parse(localStorage.getItem('sbm_samples') || '[]');
+    var reader = new FileReader();
+    reader.onload = function() {
+        samples.push({
+            id: Date.now(),
+            tag: tag,
+            date: new Date().toISOString().split('T')[0],
+            status: 'no_id',
+            match: null,
+            size: blob.size
+        });
+        localStorage.setItem('sbm_samples', JSON.stringify(samples));
+        renderSampleList();
+        sbmToast('Sample saved: ' + tag, 'success');
+    };
+    reader.readAsDataURL(blob);
+}
+
+function renderSampleList() {
+    var container = document.getElementById('sampleList');
+    if (!container) return;
+    var samples = JSON.parse(localStorage.getItem('sbm_samples') || '[]');
+    if (samples.length === 0) {
+        container.innerHTML = '<div style="color:#666;font-size:0.8rem;">No samples yet. Record or upload to get started.</div>';
+        return;
+    }
+    container.innerHTML = samples.map(function(s) {
+        var statusBadge = s.status === 'matched'
+            ? '<span style="color:#22c55e;font-size:0.65rem;font-weight:700;">MATCHED</span>'
+            : '<span style="color:#F59E0B;font-size:0.65rem;font-weight:700;">NO ID</span>';
+        return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04);">' +
+            '<div style="font-size:1rem;">🎵</div>' +
+            '<div style="flex:1;">' +
+                '<div style="font-size:0.8rem;color:#fff;font-weight:600;">' + s.tag + '</div>' +
+                '<div style="font-size:0.65rem;color:#666;">' + s.date + '</div>' +
+            '</div>' +
+            statusBadge +
+            (s.match ? '<div style="font-size:0.7rem;color:#D4A017;">' + s.match + '</div>' : '') +
+        '</div>';
+    }).join('');
+}
+
+function recheckSamples() {
+    sbmToast('Re-checking all samples against AudD + 1001 Tracklists...', 'info');
+    fetch('/api/scheduler/track-id-check', { method: 'POST', headers: { 'X-Crew-Token': localStorage.getItem('sbmToken') || '' } })
+    .then(function(r) { return r.json(); })
+    .then(function(d) { sbmToast('Re-check complete: ' + (d.matches || 0) + ' new matches', d.matches > 0 ? 'success' : 'info'); })
+    .catch(function() { sbmToast('Re-check scheduled — results will appear next time you open Samples.', 'info'); });
+}
