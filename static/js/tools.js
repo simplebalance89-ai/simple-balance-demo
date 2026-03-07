@@ -2140,62 +2140,62 @@ function recheckSamples() {
 var _sbmBoard = {
     sections: [
         {
-            title: "NEXT UP — BUILD THESE",
-            color: "#1DB954",
+            title: "P1 — DO THIS WEEK",
+            color: "#ef4444",
             items: [
-                {id:"n1", text:"Vibe Check v2 — QR codes + audience voting", done:false,
+                {id:"n1", text:"Vibe Check v2 — QR codes + audience voting", done:false, priority:"P1", cost:"Free (qrcode.js)", time:"3-4 hrs",
                  steps:["Add QR code generation (qrcode.js, client-side) so audience scans from DJ screen","Audience can upvote/downvote song requests — most popular float to top","DJ sees ranked request queue sorted by votes","Add 'now playing' history with timestamps for set documentation"]},
-                {id:"n2", text:"Serato Deep Integration — read the actual library", done:false,
-                 steps:["Parse Serato _Serato_ database folder from USB or laptop path","Extract full track library: title, artist, BPM, key, cue points, play count","Import into SBM as a browseable collection","Detect played tracks during live sets from Serato's history","Auto-feed played tracks into Vibe Check 'now playing'"]},
-                {id:"n3", text:"AI Generate v2 — better models + preview player", done:false,
-                 steps:["Current: HuggingFace MusicGen (503 cold starts) + Replicate stable-audio","Add audio preview player so you hear it before downloading","Try newer models: MusicGen-Large, Stable Audio 2.0","Add style presets: 'deep house', 'techno', 'ambient', 'hip-hop beat'","Save generated tracks to library with metadata"]},
-                {id:"n4", text:"Mix Recorder — record DJ mixes in-browser", done:false,
-                 steps:["Use Web Audio API + MediaRecorder to capture mic/line-in","Real-time waveform display during recording","Auto-detect track boundaries using silence detection","Tag transitions with BPM/key data from Serato import","Export as WAV/MP3 with embedded metadata"]},
-                {id:"n5", text:"Stems v2 — batch processing + better UI", done:false,
+                {id:"n5", text:"Stems v2 — batch processing + better UI", done:false, priority:"P1", cost:"Replicate ~$0.05/track", time:"4-5 hrs",
                  steps:["Current: one track at a time through Replicate demucs","Add batch queue — drop multiple tracks, process sequentially","Preview individual stems in-browser before downloading","Add remix mode: mute/solo/volume per stem in real time","Save stem sets to library for later use"]},
-            ]
-        },
-        {
-            title: "MAKE IT BETTER",
-            color: "#F59E0B",
-            items: [
-                {id:"s1", text:"J.A.W. improvements — smarter music AI assistant", done:false,
-                 steps:["Feed J.A.W. your Spotify/Tidal library for personalized suggestions","Add context: 'I'm playing a deep house set at 124 BPM' and get track recs","Connect to Beatport for purchase links on suggested tracks","Let J.A.W. build playlists directly into your Spotify/Tidal"]},
-                {id:"s2", text:"Discovery engine — better recommendation algorithm", done:false,
-                 steps:["Current: Azure OpenAI generates suggestions based on prompt","Add audio analysis: BPM, key, energy level matching","Cross-reference with Spotify audio features API","Build a 'similar to this track' search that actually works","Save discovery sessions so you can revisit them"]},
-                {id:"s3", text:"EPK (Press Kit) — export + share", done:false,
-                 steps:["Current: builds EPK page in-app","Add PDF export for booking agents","Add shareable public URL (simple-balance-demo.onrender.com/epk/peter)","Include embedded audio player with top tracks","Add event history pulled from Casa Events"]},
-                {id:"s4", text:"Live Audit improvements — deeper playlist analysis", done:false,
-                 steps:["Add BPM flow graph — show energy arc of the set","Key compatibility check between consecutive tracks","Flag clashing keys or BPM jumps > 8","Compare against 1001 Tracklists for track ID verification","Export audit report as PDF"]},
-                {id:"s5", text:"Mobile experience — PWA + offline", done:false,
+                {id:"s5", text:"Mobile experience — PWA + offline", done:false, priority:"P1", cost:"Free", time:"3-4 hrs",
                  steps:["Add proper manifest.json + service worker for PWA install","Offline access to library, saved stems, generated tracks","Push notifications for completed stem processing","Responsive touch targets across all tools","'Add to Home Screen' prompt on first mobile visit"]},
             ]
         },
         {
-            title: "INTEGRATIONS TO ADD",
+            title: "P2 — THIS MONTH",
+            color: "#F59E0B",
+            items: [
+                {id:"n2", text:"Serato Deep Integration — read the actual library", done:false, priority:"P2", cost:"Free", time:"6-8 hrs",
+                 steps:["Parse Serato _Serato_ database folder from USB or laptop path","Extract full track library: title, artist, BPM, key, cue points, play count","Import into SBM as a browseable collection","Detect played tracks during live sets from Serato's history","Auto-feed played tracks into Vibe Check 'now playing'"]},
+                {id:"n3", text:"AI Generate v2 — better models + preview player", done:false, priority:"P2", cost:"Replicate ~$0.10/gen", time:"4-5 hrs",
+                 steps:["Current: HuggingFace MusicGen (503 cold starts) + Replicate stable-audio","Add audio preview player so you hear it before downloading","Try newer models: MusicGen-Large, Stable Audio 2.0","Add style presets: 'deep house', 'techno', 'ambient', 'hip-hop beat'","Save generated tracks to library with metadata"]},
+                {id:"s1", text:"J.A.W. improvements — smarter music AI assistant", done:false, priority:"P2", cost:"Azure OpenAI (~$5/mo)", time:"5-6 hrs",
+                 steps:["Feed J.A.W. your Spotify/Tidal library for personalized suggestions","Add context: 'I'm playing a deep house set at 124 BPM' and get track recs","Connect to Beatport for purchase links on suggested tracks","Let J.A.W. build playlists directly into your Spotify/Tidal"]},
+                {id:"s3", text:"EPK (Press Kit) — export + share", done:false, priority:"P2", cost:"Free", time:"3-4 hrs",
+                 steps:["Current: builds EPK page in-app","Add PDF export for booking agents","Add shareable public URL (simple-balance-demo.onrender.com/epk/peter)","Include embedded audio player with top tracks","Add event history pulled from Casa Events"]},
+                {id:"s4", text:"Live Audit improvements — deeper playlist analysis", done:false, priority:"P2", cost:"Free", time:"4-5 hrs",
+                 steps:["Add BPM flow graph — show energy arc of the set","Key compatibility check between consecutive tracks","Flag clashing keys or BPM jumps > 8","Compare against 1001 Tracklists for track ID verification","Export audit report as PDF"]},
+            ]
+        },
+        {
+            title: "P3 — NEXT QUARTER",
             color: "#C084FC",
             items: [
-                {id:"i1", text:"Beatport — charts, purchase links, track metadata", done:false,
+                {id:"n4", text:"Mix Recorder — record DJ mixes in-browser", done:false, priority:"P3", cost:"Free (Web Audio API)", time:"8-10 hrs",
+                 steps:["Use Web Audio API + MediaRecorder to capture mic/line-in","Real-time waveform display during recording","Auto-detect track boundaries using silence detection","Tag transitions with BPM/key data from Serato import","Export as WAV/MP3 with embedded metadata"]},
+                {id:"s2", text:"Discovery engine — better recommendation algorithm", done:false, priority:"P3", cost:"Spotify API (free tier)", time:"6-8 hrs",
+                 steps:["Current: Azure OpenAI generates suggestions based on prompt","Add audio analysis: BPM, key, energy level matching","Cross-reference with Spotify audio features API","Build a 'similar to this track' search that actually works","Save discovery sessions so you can revisit them"]},
+                {id:"i1", text:"Beatport — charts, purchase links, track metadata", done:false, priority:"P3", cost:"Free (partner API)", time:"5-6 hrs",
                  steps:["Beatport has a partner API (apply at beatport.com/developers)","Pull top charts by genre for Discovery recommendations","Add purchase links when J.A.W. recommends a track","Import Beatport collection if user connects account"]},
-                {id:"i2", text:"Ticketmaster / Eventbrite — find gigs to play", done:false,
-                 steps:["Search venues by location and genre","Find open slots, promoter contacts","Track upcoming events you're booked for","Auto-populate Casa Events calendar from bookings"]},
-                {id:"i3", text:"SoundCloud — upload mixes + tracks", done:false,
+                {id:"i3", text:"SoundCloud — upload mixes + tracks", done:false, priority:"P3", cost:"Free (OAuth)", time:"4-5 hrs",
                  steps:["OAuth connect to SoundCloud account","Upload generated tracks or recorded mixes directly","Pull play counts and comments back into SBM dashboard","Share links from within the app"]},
-                {id:"i4", text:"Rekordbox / Traktor import — not just Serato", done:false,
+                {id:"i4", text:"Rekordbox / Traktor import — not just Serato", done:false, priority:"P3", cost:"Free", time:"5-6 hrs",
                  steps:["Rekordbox uses an SQLite database (rekordbox.db)","Traktor uses NML (XML) collection files","Parse both formats same as Serato","Auto-detect which DJ software the user has"]},
             ]
         },
         {
-            title: "BIG PICTURE",
+            title: "P4 — WHEN READY TO SCALE",
             color: "#818cf8",
             items: [
-                {id:"b1", text:"Multi-user — let other DJs sign up and use it", done:false,
+                {id:"i2", text:"Ticketmaster / Eventbrite — find gigs to play", done:false, priority:"P4", cost:"Free tier APIs", time:"6-8 hrs",
+                 steps:["Search venues by location and genre","Find open slots, promoter contacts","Track upcoming events you're booked for","Auto-populate Casa Events calendar from bookings"]},
+                {id:"b1", text:"Multi-user — let other DJs sign up and use it", done:false, priority:"P4", cost:"Supabase free tier", time:"10-12 hrs",
                  steps:["Supabase auth already exists — extend registration flow","Each user gets their own library, stems, sets, EPK","Admin panel for Peter to manage users","Free tier with limits, Pro tier for full access"]},
-                {id:"b2", text:"Collaborative sets — co-build playlists with other DJs", done:false,
+                {id:"b2", text:"Collaborative sets — co-build playlists with other DJs", done:false, priority:"P4", cost:"Free (WebSocket)", time:"8-10 hrs",
                  steps:["Invite another DJ to collaborate on a set","Both add tracks, reorder, annotate transitions","Real-time sync like Google Docs","Export final setlist to both users' libraries"]},
-                {id:"b3", text:"Analytics dashboard — know your music", done:false,
+                {id:"b3", text:"Analytics dashboard — know your music", done:false, priority:"P4", cost:"Free", time:"6-8 hrs",
                  steps:["Track most played genres, BPM ranges, keys","Show set duration trends, peak energy moments","Compare your library against trending charts","Monthly digest: 'You played 47 sets, avg 2.1 hours, top genre: tech house'"]},
-                {id:"b4", text:"Monetization — premium features for paying DJs", done:false,
+                {id:"b4", text:"Monetization — premium features for paying DJs", done:false, priority:"P4", cost:"Stripe ($0 until revenue)", time:"8-10 hrs",
                  steps:["Free: basic library, J.A.W. (limited), Vibe Check","Pro ($14.99/mo): unlimited stems, batch processing, AI generate, full analytics","Add Stripe checkout","Landing page with feature comparison"]},
             ]
         }
@@ -2231,6 +2231,13 @@ function initSBMBoard() {
             html += '<input type="checkbox" ' + (isChecked ? 'checked' : '') + ' onchange="toggleSBMBoardItem(\'' + item.id + '\',this)" style="width:18px;height:18px;accent-color:' + section.color + ';cursor:pointer;flex-shrink:0;margin-top:1px;">';
             html += '<div style="flex:1;min-width:0;">';
             html += '<div style="font-size:13px;font-weight:600;color:#fff;' + checkStyle + '">' + item.text + '</div>';
+
+            if (item.priority || item.cost || item.time) {
+                html += '<div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;">';
+                if (item.cost) html += '<span style="font-size:9px;background:rgba(16,185,129,0.15);color:#10b981;padding:2px 6px;border-radius:4px;font-weight:600;">' + item.cost + '</span>';
+                if (item.time) html += '<span style="font-size:9px;background:rgba(59,130,246,0.15);color:#3b82f6;padding:2px 6px;border-radius:4px;font-weight:600;">' + item.time + '</span>';
+                html += '</div>';
+            }
 
             if (item.steps && item.steps.length) {
                 html += '<div style="margin-top:6px;padding-left:4px;">';
