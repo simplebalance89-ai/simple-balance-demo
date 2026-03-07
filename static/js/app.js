@@ -57,6 +57,26 @@ var TOOL_TABS = [
         .catch(() => {});
 })();
 
+/* ===== BOTTOM NAV ===== */
+function sbmNavTo(section) {
+    document.querySelectorAll('.sbm-nav-btn').forEach(function(b) { b.classList.remove('active'); });
+    var btn = document.getElementById('nav' + section.charAt(0).toUpperCase() + section.slice(1));
+    if (btn) btn.classList.add('active');
+
+    if (section === 'home') {
+        selectedMode = null;
+        renderToolTabs();
+        renderHomeContent();
+    } else if (section === 'studio') {
+        selectTool('mastering');
+    } else if (section === 'discover') {
+        selectTool('discovery');
+    } else if (section === 'library') {
+        selectTool('archive');
+    }
+    window.scrollTo(0, 0);
+}
+
 /* ===== BEATPORT & TICKETMASTER — Placeholder Connects ===== */
 function connectBeatport() {
     sbmToast('Beatport integration coming soon — DJ charts, top tracks, and purchase links.', 'info');

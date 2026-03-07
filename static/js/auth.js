@@ -140,6 +140,8 @@ function onGateSuccess() {
     if (app) app.style.display = '';
     var toolTabsWrap = document.getElementById('toolTabsWrap');
     if (toolTabsWrap) toolTabsWrap.style.display = '';
+    var bottomNav = document.getElementById('sbmBottomNav');
+    if (bottomNav) bottomNav.style.display = '';
     authUpdateUI(sbmProfile);
     showToast('Welcome, ' + sbmProfile.display_name + '!');
 

@@ -162,10 +162,53 @@ html { scroll-behavior: smooth; }
     color: var(--sbm-text-secondary);
 }
 
+/* ===== BOTTOM NAV BAR ===== */
+.sbm-bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 200;
+    background: rgba(13,13,26,0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid var(--sbm-border);
+    padding: 6px 0 env(safe-area-inset-bottom, 6px);
+}
+.sbm-bottom-nav-inner {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    max-width: 500px;
+    margin: 0 auto;
+}
+.sbm-nav-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    background: none;
+    border: none;
+    color: var(--sbm-text-muted);
+    font-family: inherit;
+    font-size: 0.55rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: color 0.2s;
+}
+.sbm-nav-btn .nav-icon { font-size: 1.3rem; line-height: 1; }
+.sbm-nav-btn.active { color: var(--sbm-accent-light); }
+.sbm-nav-btn:active { color: var(--sbm-accent); }
+
 /* ===== MAIN CONTENT ===== */
 #app {
     width: 100%;
     padding: 20px;
+    padding-bottom: 80px;
     animation: pageIn 0.4s ease;
 }
 .content-area {
