@@ -428,7 +428,12 @@ async def download_audio_file(job_id: str):
 # ── AudD Mix Digestor ─────────────────────────────────────────────────────────
 
 AUDD_API_URL = "https://api.audd.io/"
-MUSICGEN_MODEL = "meta/musicgen"
+# Primary: Stable Audio 2.5 (active). Fallback: MusicGen (may be deprecated)
+MUSIC_MODELS = [
+    "stability-ai/stable-audio-2.5",
+    "meta/musicgen:671ac645ce5e552cc63a54a2bbff63baaf072c63a4ed27abe4dc0c8e1ae1da57",
+    "meta/musicgen",
+]
 
 
 def format_timestamp(seconds):
@@ -1437,25 +1442,36 @@ async def generate_audio(payload: dict):
             duration = 8
     duration = max(1, min(int(duration), 30))
 
-    try:
-        output = replicate.run(
-            MUSICGEN_MODEL,
-            input={
-                "prompt": prompt,
-                "duration": duration,
-            },
-        )
+    last_error = None
+    for model_id in MUSIC_MODELS:
+        try:
+            input_params = {"prompt": prompt, "duration": duration}
+            # Stable Audio uses 'seconds_total' instead of 'duration'
+            if "stable-audio" in model_id:
+                input_params = {"prompt": prompt, "seconds_total": duration}
 
-        # MusicGen returns a single audio URL (FileOutput or string)
-        audio_url = str(output) if output else None
-        if not audio_url:
-            return JSONResponse({"error": "No audio generated"}, status_code=500)
+            output = replicate.run(model_id, input=input_params)
 
-        return {"audio_url": audio_url, "prompt": prompt, "duration": duration}
+            # Handle different output formats
+            audio_url = None
+            if isinstance(output, str):
+                audio_url = output
+            elif hasattr(output, 'url'):
+                audio_url = output.url
+            elif output:
+                audio_url = str(output)
 
-    except Exception as e:
-        log_error("MusicGen", f"Generation failed: {type(e).__name__}", str(e))
-        return JSONResponse({"error": str(e)}, status_code=500)
+            if audio_url:
+                logger.info(f"Audio generated via {model_id}")
+                return {"audio_url": audio_url, "prompt": prompt, "duration": duration, "model": model_id.split("/")[-1].split(":")[0]}
+
+        except Exception as e:
+            last_error = e
+            logger.warning(f"Model {model_id} failed: {e}")
+            continue
+
+    log_error("AudioGen", f"All models failed", str(last_error))
+    return JSONResponse({"error": f"Generation failed: {last_error}"}, status_code=500)
 
 
 # ── Mix Archive ───────────────────────────────────────────────────────────────
