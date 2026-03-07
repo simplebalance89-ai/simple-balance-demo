@@ -448,10 +448,10 @@ function generateAudio() {
         container.innerHTML =
             '<div style="background:rgba(212,160,23,0.06);border:1px solid rgba(212,160,23,0.2);border-radius:14px;padding:20px;text-align:center;">' +
                 '<div style="font-family:\'Playfair Display\',serif;font-size:1rem;color:#FFE082;margin-bottom:4px;">Audio Generated</div>' +
-                '<div style="font-size:0.75rem;color:rgba(255,255,255,0.4);margin-bottom:12px;">' + data.duration + 's | MusicGen</div>' +
+                '<div style="font-size:0.75rem;color:rgba(255,255,255,0.4);margin-bottom:12px;">' + data.duration + 's | ' + (data.model || 'AI') + '</div>' +
                 '<audio controls style="width:100%;margin-bottom:12px;border-radius:8px;" src="' + data.audio_url + '"></audio>' +
                 '<div style="font-size:0.7rem;color:rgba(255,255,255,0.3);margin-bottom:10px;word-break:break-all;">"' + (data.prompt || prompt) + '"</div>' +
-                '<a href="' + data.audio_url + '" download="generated_audio.wav" style="display:inline-block;padding:8px 20px;background:linear-gradient(135deg,#D4A017,#B8860B);color:#0D0D1A;border-radius:8px;text-decoration:none;font-weight:800;font-size:0.8rem;">Download</a>' +
+                (data.audio_url.indexOf('data:') === 0 ? '' : '<a href="' + data.audio_url + '" download="generated_audio.wav" style="display:inline-block;padding:8px 20px;background:linear-gradient(135deg,#D4A017,#B8860B);color:#0D0D1A;border-radius:8px;text-decoration:none;font-weight:800;font-size:0.8rem;">Download</a>') +
             '</div>';
     })
     .catch(function(err) {

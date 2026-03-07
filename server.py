@@ -1419,17 +1419,13 @@ async def generate(payload: dict):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
-# ── AI Audio Generation (MusicGen via Replicate) ─────────────────────────────
+# ── AI Audio Generation (MusicGen via Hugging Face free API, Replicate fallback) ──
+
+HF_MUSICGEN_URL = "https://api-inference.huggingface.co/models/facebook/musicgen-small"
 
 @app.post("/api/generate/audio")
 async def generate_audio(payload: dict):
-    """Generate actual audio from a text prompt using Meta's MusicGen model."""
-    token = get_secret("REPLICATE_API_TOKEN")
-    if not token:
-        return JSONResponse({"error": "Replicate API token not configured"}, status_code=503)
-
-    os.environ["REPLICATE_API_TOKEN"] = token
-
+    """Generate audio from a text prompt. Tries Hugging Face free API first, Replicate fallback."""
     prompt = payload.get("prompt", "")
     if not prompt:
         return JSONResponse({"error": "No prompt provided"}, status_code=400)
@@ -1442,36 +1438,60 @@ async def generate_audio(payload: dict):
             duration = 8
     duration = max(1, min(int(duration), 30))
 
-    last_error = None
-    for model_id in MUSIC_MODELS:
-        try:
-            input_params = {"prompt": prompt, "duration": duration}
-            # Stable Audio uses 'seconds_total' instead of 'duration'
-            if "stable-audio" in model_id:
-                input_params = {"prompt": prompt, "seconds_total": duration}
+    # --- Try 1: Hugging Face Inference API (free, no key required for public models) ---
+    try:
+        hf_token = get_secret("HF_API_TOKEN", "")
+        hf_headers = {"Content-Type": "application/json"}
+        if hf_token:
+            hf_headers["Authorization"] = f"Bearer {hf_token}"
 
-            output = replicate.run(model_id, input=input_params)
+        async with httpx.AsyncClient(timeout=120) as hc:
+            hf_resp = await hc.post(
+                HF_MUSICGEN_URL,
+                headers=hf_headers,
+                json={"inputs": prompt},
+            )
+            if hf_resp.status_code == 200 and hf_resp.headers.get("content-type", "").startswith("audio/"):
+                # Save audio bytes and serve as data URI
+                import base64 as b64gen
+                audio_b64 = b64gen.b64encode(hf_resp.content).decode()
+                ct = hf_resp.headers.get("content-type", "audio/flac")
+                audio_url = f"data:{ct};base64,{audio_b64}"
+                logger.info("Audio generated via Hugging Face MusicGen")
+                return {"audio_url": audio_url, "prompt": prompt, "duration": duration, "model": "musicgen-small"}
+            else:
+                logger.warning(f"HF MusicGen returned {hf_resp.status_code}: {hf_resp.text[:200]}")
+    except Exception as e:
+        logger.warning(f"HF MusicGen failed: {e}")
 
-            # Handle different output formats
-            audio_url = None
-            if isinstance(output, str):
-                audio_url = output
-            elif hasattr(output, 'url'):
-                audio_url = output.url
-            elif output:
-                audio_url = str(output)
+    # --- Try 2: Replicate (if token available) ---
+    replicate_token = get_secret("REPLICATE_API_TOKEN")
+    if replicate_token:
+        os.environ["REPLICATE_API_TOKEN"] = replicate_token
+        last_error = None
+        for model_id in MUSIC_MODELS:
+            try:
+                input_params = {"prompt": prompt, "duration": duration}
+                if "stable-audio" in model_id:
+                    input_params = {"prompt": prompt, "seconds_total": duration}
+                output = replicate.run(model_id, input=input_params)
+                audio_url = None
+                if isinstance(output, str):
+                    audio_url = output
+                elif hasattr(output, 'url'):
+                    audio_url = output.url
+                elif output:
+                    audio_url = str(output)
+                if audio_url:
+                    logger.info(f"Audio generated via {model_id}")
+                    return {"audio_url": audio_url, "prompt": prompt, "duration": duration, "model": model_id.split("/")[-1].split(":")[0]}
+            except Exception as e:
+                last_error = e
+                logger.warning(f"Model {model_id} failed: {e}")
+                continue
 
-            if audio_url:
-                logger.info(f"Audio generated via {model_id}")
-                return {"audio_url": audio_url, "prompt": prompt, "duration": duration, "model": model_id.split("/")[-1].split(":")[0]}
-
-        except Exception as e:
-            last_error = e
-            logger.warning(f"Model {model_id} failed: {e}")
-            continue
-
-    log_error("AudioGen", f"All models failed", str(last_error))
-    return JSONResponse({"error": f"Generation failed: {last_error}"}, status_code=500)
+    log_error("AudioGen", "All generation methods failed", "HF free API + Replicate both unavailable")
+    return JSONResponse({"error": "Music generation temporarily unavailable. Try again in a moment."}, status_code=503)
 
 
 # ── Mix Archive ───────────────────────────────────────────────────────────────
