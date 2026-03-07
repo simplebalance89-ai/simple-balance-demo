@@ -1165,40 +1165,64 @@ async def discovery(payload: dict):
 
 # ── Events Radar ──────────────────────────────────────────────────────────────
 
+# ── City → lat/lon geocoding cache ────────────────────────────────────────────
+_CITY_COORDS = {
+    "miami": (25.76, -80.19), "los angeles": (34.05, -118.24), "new york": (40.71, -74.01),
+    "chicago": (41.88, -87.63), "las vegas": (36.17, -115.14), "atlanta": (33.75, -84.39),
+    "austin": (30.27, -97.74), "denver": (39.74, -104.99), "san francisco": (37.77, -122.42),
+    "detroit": (42.33, -83.05), "seattle": (47.61, -122.33), "dallas": (32.78, -96.80),
+    "phoenix": (33.45, -112.07), "portland": (45.52, -122.68), "nashville": (36.16, -86.78),
+    "berlin": (52.52, 13.41), "london": (51.51, -0.13), "ibiza": (38.91, 1.43),
+    "amsterdam": (52.37, 4.90), "barcelona": (41.39, 2.17), "paris": (48.86, 2.35),
+}
+
+
 @app.post("/api/events")
 async def events(payload: dict):
-    """AI-generated upcoming electronic music events for a city."""
-    city = payload.get("city", "Miami")
-    client = get_ai_client()
-    if not client:
-        return JSONResponse({"error": "Azure OpenAI not configured"}, status_code=503)
+    """Real upcoming concert/music events via PredictHQ API."""
+    city = payload.get("city", "Miami").strip()
+    phq_token = get_secret("PREDICTHQ_API_TOKEN")
 
-    model = get_secret("AZURE_OPENAI_MODEL", "gpt-4o")
-    system_prompt = (
-        "You are an electronic music events expert. Given a city, generate 6 realistic upcoming "
-        "electronic music events. Return as JSON object: {events: [{name, venue, date, genre, link}]}. "
-        "Use realistic venue names and plausible dates in the next 3 months. For link, use '#' as placeholder."
-    )
+    if not phq_token:
+        return JSONResponse({"error": "PredictHQ API not configured"}, status_code=503)
+
+    coords = _CITY_COORDS.get(city.lower())
+    if not coords:
+        # Default to Miami if unknown city
+        coords = _CITY_COORDS["miami"]
 
     try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"City: {city}"},
-            ],
-            temperature=0.7,
-        )
-        content = response.choices[0].message.content
-        cleaned = content.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-            cleaned = cleaned.rsplit("```", 1)[0]
-        result = json.loads(cleaned)
-        return result
-    except json.JSONDecodeError:
-        return {"events": [], "raw": content}
+        async with httpx.AsyncClient(timeout=15) as hc:
+            resp = await hc.get(
+                "https://api.predicthq.com/v1/events/",
+                params={
+                    "category": "concerts,festivals",
+                    "limit": 15,
+                    "sort": "start",
+                    "start.gte": time.strftime("%Y-%m-%d"),
+                    "location_around.origin": f"{coords[0]},{coords[1]}",
+                    "location_around.offset": "80km",
+                },
+                headers={"Authorization": f"Bearer {phq_token}"},
+            )
+            data = resp.json()
+
+        raw_events = data.get("results", [])
+        events_list = []
+        for e in raw_events:
+            events_list.append({
+                "name": e.get("title", "Unknown"),
+                "venue": (e.get("entities", [{}])[0].get("name", "") if e.get("entities") else "") or city,
+                "date": e.get("start", "")[:10],
+                "genre": e.get("labels", ["music"])[0] if e.get("labels") else "music",
+                "category": e.get("category", ""),
+                "link": f"https://www.google.com/search?q={e.get('title', '').replace(' ', '+')}+tickets",
+            })
+
+        return {"events": events_list, "city": city, "source": "predicthq", "count": len(events_list)}
+
     except Exception as e:
+        logger.error(f"PredictHQ error: {e}")
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
@@ -2760,6 +2784,7 @@ async def api_status():
         "tidal": bool(get_secret("TIDAL_CLIENT_ID") and get_secret("TIDAL_CLIENT_SECRET")),
         "genius": bool(get_secret("GENIUS_API_TOKEN")),
         "beatport": bool(get_secret("BEATPORT_CLIENT_ID") and get_secret("BEATPORT_CLIENT_SECRET")),
+        "predicthq": bool(get_secret("PREDICTHQ_API_TOKEN")),
     }
 
 
