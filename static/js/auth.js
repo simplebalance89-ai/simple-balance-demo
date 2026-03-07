@@ -18,6 +18,8 @@ function sbmFetch(url, options) {
 
 /* ----- Auto-login from saved token ----- */
 function initAuth() {
+    loadGateMembers();
+    buildGateColors();
     var saved = localStorage.getItem('sbmToken');
     if (saved) {
         fetch('/api/crew/verify', { headers: { 'X-Crew-Token': saved } })
@@ -26,13 +28,120 @@ function initAuth() {
                 if (data.profile) {
                     sbmToken = saved;
                     sbmProfile = data.profile;
-                    authUpdateUI(sbmProfile);
+                    onGateSuccess();
                 } else {
                     localStorage.removeItem('sbmToken');
                 }
             })
             .catch(function() {});
     }
+}
+
+/* ----- Login Gate ----- */
+function loadGateMembers() {
+    fetch('/api/crew/members').then(function(r) { return r.json(); }).then(function(data) {
+        var sel = document.getElementById('gateName');
+        if (!sel || !data.members) return;
+        sel.innerHTML = '<option value="">Select your name...</option>';
+        data.members.forEach(function(m) {
+            var name = typeof m === 'string' ? m : m.name;
+            sel.innerHTML += '<option value="' + escapeHTML(name) + '">' + escapeHTML(name) + '</option>';
+        });
+    }).catch(function() {});
+}
+
+function buildGateColors() {
+    var container = document.getElementById('gateColors');
+    if (!container) return;
+    var html = '';
+    SBM_COLORS.forEach(function(c, i) {
+        html += '<div class="color-swatch' + (i === 0 ? ' picked' : '') + '" data-color="' + c + '" onclick="pickColor(this)" style="width:28px;height:28px;border-radius:50%;background:' + c + ';cursor:pointer;border:2px solid ' + (i === 0 ? '#fff' : 'transparent') + ';"></div>';
+    });
+    container.innerHTML = html;
+}
+
+function switchGateTab(tab) {
+    document.getElementById('gateError').textContent = '';
+    if (tab === 'signin') {
+        document.getElementById('gateSignin').style.display = 'block';
+        document.getElementById('gateRegister').style.display = 'none';
+        document.getElementById('gateTabSignin').style.color = '#FFE082';
+        document.getElementById('gateTabSignin').style.borderBottomColor = '#FFE082';
+        document.getElementById('gateTabRegister').style.color = 'rgba(255,255,255,0.4)';
+        document.getElementById('gateTabRegister').style.borderBottomColor = 'transparent';
+    } else {
+        document.getElementById('gateSignin').style.display = 'none';
+        document.getElementById('gateRegister').style.display = 'block';
+        document.getElementById('gateTabRegister').style.color = '#FFE082';
+        document.getElementById('gateTabRegister').style.borderBottomColor = '#FFE082';
+        document.getElementById('gateTabSignin').style.color = 'rgba(255,255,255,0.4)';
+        document.getElementById('gateTabSignin').style.borderBottomColor = 'transparent';
+    }
+}
+
+function gateLogin() {
+    var name = document.getElementById('gateName').value;
+    var pin = document.getElementById('gatePin').value;
+    var err = document.getElementById('gateError');
+    err.textContent = '';
+    if (!name) { err.textContent = 'Pick your name'; return; }
+    if (!pin || pin.length !== 4) { err.textContent = 'PIN must be 4 digits'; return; }
+
+    fetch('/api/crew/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name, pin: pin })
+    }).then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+    .then(function(res) {
+        if (res.ok && res.data.token) {
+            sbmToken = res.data.token;
+            sbmProfile = res.data.profile;
+            localStorage.setItem('sbmToken', sbmToken);
+            onGateSuccess();
+        } else {
+            err.textContent = res.data.error || 'Login failed';
+        }
+    }).catch(function() { err.textContent = 'Server error'; });
+}
+
+function gateRegister() {
+    var name = (document.getElementById('gateRegName').value || '').trim();
+    var pin = document.getElementById('gateRegPin').value;
+    var color = getSelectedColor();
+    var err = document.getElementById('gateError');
+    err.textContent = '';
+    if (!name || name.length < 2) { err.textContent = 'Name must be at least 2 characters'; return; }
+    if (!pin || pin.length !== 4) { err.textContent = 'PIN must be 4 digits'; return; }
+
+    fetch('/api/crew/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name, pin: pin, color: color })
+    }).then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+    .then(function(res) {
+        if (res.ok && res.data.token) {
+            sbmToken = res.data.token;
+            sbmProfile = res.data.profile;
+            localStorage.setItem('sbmToken', sbmToken);
+            onGateSuccess();
+        } else {
+            err.textContent = res.data.error || 'Registration failed';
+        }
+    }).catch(function() { err.textContent = 'Server error'; });
+}
+
+function onGateSuccess() {
+    // Hide gate, show app
+    var gate = document.getElementById('loginGate');
+    if (gate) gate.style.display = 'none';
+    var topBar = document.getElementById('topBar');
+    if (topBar) topBar.style.display = '';
+    var app = document.getElementById('app');
+    if (app) app.style.display = '';
+    var nav = document.getElementById('bottomNav');
+    if (nav) nav.style.display = '';
+    authUpdateUI(sbmProfile);
+    showToast('Welcome, ' + sbmProfile.display_name + '!');
 }
 
 /* ----- UI Update ----- */

@@ -25,19 +25,51 @@
 <!-- Toast -->
 <div class="sbm-toast" id="sbmToast"></div>
 
-<!-- Top Bar -->
-<div class="top-bar">
+<!-- Full Screen Login Gate -->
+<div id="loginGate" style="position:fixed;inset:0;z-index:9999;background:#0D0D1A;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;">
+    <div style="text-align:center;margin-bottom:32px;">
+        <div style="font-family:'Playfair Display',serif;font-size:2rem;font-weight:900;color:#FFE082;margin-bottom:4px;">Simple Balance Music</div>
+        <div style="font-size:0.75rem;color:#8A7A5A;letter-spacing:2px;text-transform:uppercase;">AI Production Suite</div>
+    </div>
+    <div style="width:100%;max-width:360px;">
+        <div style="display:flex;gap:0;margin-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.1);">
+            <div id="gateTabSignin" onclick="switchGateTab('signin')" style="flex:1;text-align:center;padding:10px;cursor:pointer;font-weight:700;font-size:0.85rem;color:#FFE082;border-bottom:2px solid #FFE082;">Sign In</div>
+            <div id="gateTabRegister" onclick="switchGateTab('register')" style="flex:1;text-align:center;padding:10px;cursor:pointer;font-weight:700;font-size:0.85rem;color:rgba(255,255,255,0.4);border-bottom:2px solid transparent;">Register</div>
+        </div>
+        <div id="gateError" style="color:#EF4444;font-size:0.8rem;text-align:center;min-height:20px;margin-bottom:8px;"></div>
+        <div id="gateSignin">
+            <select id="gateName" style="width:100%;padding:14px;background:#1a1a2e;border:1px solid rgba(255,255,255,0.15);border-radius:10px;color:#fff;font-size:0.9rem;margin-bottom:10px;font-family:inherit;">
+                <option value="">Select your name...</option>
+            </select>
+            <input type="password" id="gatePin" placeholder="4-digit PIN" maxlength="4" inputmode="numeric" pattern="[0-9]*" style="width:100%;padding:14px;background:#1a1a2e;border:1px solid rgba(255,255,255,0.15);border-radius:10px;color:#fff;font-size:0.9rem;margin-bottom:14px;font-family:inherit;box-sizing:border-box;" onkeydown="if(event.key==='Enter')gateLogin()">
+            <button onclick="gateLogin()" style="width:100%;padding:14px;background:linear-gradient(135deg,#D4A017,#FFE082);color:#0D0D1A;border:none;border-radius:10px;font-weight:800;font-size:1rem;cursor:pointer;font-family:inherit;">SIGN IN</button>
+        </div>
+        <div id="gateRegister" style="display:none;">
+            <input type="text" id="gateRegName" placeholder="Your producer name" style="width:100%;padding:14px;background:#1a1a2e;border:1px solid rgba(255,255,255,0.15);border-radius:10px;color:#fff;font-size:0.9rem;margin-bottom:10px;font-family:inherit;box-sizing:border-box;">
+            <input type="password" id="gateRegPin" placeholder="4-digit PIN" maxlength="4" inputmode="numeric" pattern="[0-9]*" style="width:100%;padding:14px;background:#1a1a2e;border:1px solid rgba(255,255,255,0.15);border-radius:10px;color:#fff;font-size:0.9rem;margin-bottom:12px;font-family:inherit;box-sizing:border-box;">
+            <div style="margin-bottom:14px;">
+                <div style="font-size:0.7rem;color:rgba(255,255,255,0.4);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;">Pick your color</div>
+                <div id="gateColors" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+            </div>
+            <button onclick="gateRegister()" style="width:100%;padding:14px;background:linear-gradient(135deg,#D4A017,#FFE082);color:#0D0D1A;border:none;border-radius:10px;font-weight:800;font-size:1rem;cursor:pointer;font-family:inherit;">CREATE PROFILE</button>
+        </div>
+    </div>
+    <button onclick="clearAllCache()" style="margin-top:24px;background:none;border:none;color:#444;font-size:0.6rem;cursor:pointer;">Clear Cache</button>
+</div>
+
+<!-- Top Bar (hidden until login) -->
+<div class="top-bar" id="topBar" style="display:none;">
     <span style="font-family:'Playfair Display',serif;font-weight:700;color:#FFE082;">SBM</span>
     <span style="font-size:0.6rem;color:#8A7A5A;letter-spacing:2px;text-transform:uppercase;">AI Production Suite</span>
     <button onclick="clearAllCache()" style="background:none;border:none;color:#666;font-size:0.6rem;cursor:pointer;padding:4px 8px;">Clear Cache</button>
-    <div id="authHeaderBtn" onclick="showAuthModal('login')" style="cursor:pointer;font-size:0.7rem;color:#FFE082;padding:4px 8px;">Sign In</div>
+    <div id="authHeaderBtn" style="cursor:pointer;font-size:0.7rem;color:#FFE082;padding:4px 8px;"></div>
 </div>
 
-<!-- Main Content -->
-<main id="app"></main>
+<!-- Main Content (hidden until login) -->
+<main id="app" style="display:none;"></main>
 
 <!-- Bottom Navigation -->
-<nav class="bottom-nav">
+<nav class="bottom-nav" id="bottomNav" style="display:none;">
     <div class="nav-tab active" data-tab="home" onclick="navigateTab('home')">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
         <span>Home</span>
