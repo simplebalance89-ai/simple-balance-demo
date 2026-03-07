@@ -2324,6 +2324,65 @@ async def _build_profile_from_spotify(favorites: list) -> dict | None:
     }
 
 
+# ── Crew Auth (PIN-based profile selector) ────────────────────────────────────
+
+SBM_CREW = {
+    "J.A.W.": {"color": "#10B981", "is_admin": False},
+    "Chinny Beatz": {"color": "#E879F9", "is_admin": False},
+    "Pete Dekan": {"color": "#818cf8", "is_admin": True},
+    "CGReyes": {"color": "#F59E0B", "is_admin": False},
+    "TECHNOLASKO": {"color": "#EF4444", "is_admin": False},
+    "Jose Alejo": {"color": "#06B6D4", "is_admin": False},
+    "Guest": {"color": "#6B7280", "is_admin": False},
+}
+_sbm_tokens = {}  # token -> profile dict
+
+
+@app.post("/api/crew/login")
+async def crew_login(payload: dict):
+    name = payload.get("name", "").strip()
+    pin = payload.get("pin", "")
+    if name not in SBM_CREW:
+        return JSONResponse({"error": "Unknown crew member"}, status_code=401)
+    if str(pin) != "1234":
+        return JSONResponse({"error": "Wrong PIN"}, status_code=401)
+    token = secrets.token_urlsafe(32)
+    profile = {"display_name": name, "color": SBM_CREW[name]["color"], "is_admin": SBM_CREW[name]["is_admin"]}
+    _sbm_tokens[token] = profile
+    return {"token": token, "profile": profile}
+
+
+@app.post("/api/crew/register")
+async def crew_register(payload: dict):
+    name = payload.get("name", "").strip()
+    pin = payload.get("pin", "")
+    color = payload.get("color", "#818cf8")
+    if not name or len(name) < 2:
+        return JSONResponse({"error": "Name must be at least 2 characters"}, status_code=400)
+    if str(pin) != "1234":
+        return JSONResponse({"error": "PIN must be 1234"}, status_code=400)
+    if name not in SBM_CREW:
+        SBM_CREW[name] = {"color": color, "is_admin": False}
+    token = secrets.token_urlsafe(32)
+    profile = {"display_name": name, "color": color, "is_admin": False}
+    _sbm_tokens[token] = profile
+    return {"token": token, "profile": profile}
+
+
+@app.get("/api/crew/verify")
+async def crew_verify(request: Request):
+    token = request.headers.get("X-Crew-Token", "")
+    profile = _sbm_tokens.get(token)
+    if not profile:
+        return JSONResponse({"error": "Invalid token"}, status_code=401)
+    return {"profile": profile}
+
+
+@app.get("/api/crew/members")
+async def crew_members():
+    return {"members": list(SBM_CREW.keys())}
+
+
 @app.post("/api/auth/ensure-profile")
 async def ensure_profile(request: Request):
     """Ensure a profile row exists for the authenticated user. Called after signup/login."""

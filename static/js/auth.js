@@ -1,151 +1,55 @@
-/* ===== SIMPLE BALANCE MUSIC — AUTH MODULE ===== */
+/* ===== SIMPLE BALANCE MUSIC — CREW AUTH ===== */
 
-const SUPABASE_URL = 'https://mprvtxmgnewfqzawpjvy.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1wcnZ0eG1nbmV3ZnF6YXdwanZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1MDYxNTEsImV4cCI6MjA4ODA4MjE1MX0.AIfMAno4Dep5wiT0JxRSW4HH-IY0x174PyruU80BavM';
-let supabaseClient = null;
-let currentUser = null;
-let _cachedAccessToken = null;
+var sbmToken = null;
+var sbmProfile = null; // {display_name, color, is_admin}
 
-/* ----- Supabase Init ----- */
-function initSupabase() {
-    if (typeof supabase !== 'undefined' && supabase.createClient) {
-        supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+var SBM_COLORS = [
+    '#818cf8', '#10B981', '#E879F9', '#F59E0B',
+    '#EF4444', '#06B6D4', '#A78BFA', '#F472B6'
+];
 
-        // Listen for auth state changes
-        supabaseClient.auth.onAuthStateChange((event, session) => {
-            if (session && session.user) {
-                currentUser = session.user;
-                _cachedAccessToken = session.access_token;
-                authUpdateUI(currentUser);
-            } else {
-                currentUser = null;
-                _cachedAccessToken = null;
-                authUpdateUI(null);
-            }
-        });
+/* ----- Crew Fetch (adds token header) ----- */
+function sbmFetch(url, options) {
+    options = options || {};
+    options.headers = options.headers || {};
+    if (sbmToken) options.headers['X-Crew-Token'] = sbmToken;
+    return fetch(url, options);
+}
 
-        checkSession();
-    } else {
-        console.warn('[Auth] Supabase JS not loaded — auth disabled.');
+/* ----- Auto-login from saved token ----- */
+function initAuth() {
+    var saved = localStorage.getItem('sbmToken');
+    if (saved) {
+        fetch('/api/crew/verify', { headers: { 'X-Crew-Token': saved } })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.profile) {
+                    sbmToken = saved;
+                    sbmProfile = data.profile;
+                    authUpdateUI(sbmProfile);
+                } else {
+                    localStorage.removeItem('sbmToken');
+                }
+            })
+            .catch(function() {});
     }
 }
 
-/* ----- Session Management ----- */
-async function checkSession() {
-    if (!supabaseClient) return;
-    try {
-        const { data: { session }, error } = await supabaseClient.auth.getSession();
-        if (error) {
-            console.warn('[Auth] Session check error:', error.message);
-            return;
-        }
-        if (session && session.user) {
-            currentUser = session.user;
-            _cachedAccessToken = session.access_token;
-            authUpdateUI(currentUser);
-        } else {
-            currentUser = null;
-            _cachedAccessToken = null;
-            authUpdateUI(null);
-        }
-    } catch (err) {
-        console.warn('[Auth] Session check failed:', err);
-    }
-}
-
-function getAuthHeaders() {
-    if (_cachedAccessToken) {
-        return { Authorization: 'Bearer ' + _cachedAccessToken };
-    }
-    return {};
-}
-
-async function getAuthHeadersAsync() {
-    if (!supabaseClient) return {};
-    try {
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        if (session && session.access_token) {
-            return { Authorization: 'Bearer ' + session.access_token };
-        }
-    } catch (e) {
-        console.warn('[Auth] Could not get token:', e);
-    }
-    return {};
-}
-
-/* ----- Auth Actions ----- */
-async function authLogin(email, password) {
-    if (!supabaseClient) return { error: { message: 'Auth not initialized' } };
-    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-    if (error) return { error };
-    currentUser = data.user;
-    authUpdateUI(currentUser);
-    closeAuthModal();
-    // Ensure profile row exists server-side
-    ensureProfile();
-    return { data };
-}
-
-async function authSignup(email, password, displayName) {
-    if (!supabaseClient) return { error: { message: 'Auth not initialized' } };
-    try {
-        const { data, error } = await supabaseClient.auth.signUp({
-            email,
-            password,
-            options: {
-                data: { display_name: displayName || '' }
-            }
-        });
-        if (error) {
-            // Supabase 500 = usually a trigger/DB issue
-            if (error.status === 500 || (error.message && error.message.indexOf('Database error') !== -1)) {
-                return { error: { message: 'Signup failed — database error. Ask Peter to run supabase_fix.sql in the Supabase SQL editor.' } };
-            }
-            return { error };
-        }
-        // If email confirmation is required, user won't be logged in yet
-        if (data.user && data.user.identities && data.user.identities.length === 0) {
-            return { error: { message: 'This email is already registered. Try logging in.' } };
-        }
-        if (data.session) {
-            currentUser = data.user;
-            authUpdateUI(currentUser);
-            closeAuthModal();
-            // Ensure profile row exists server-side
-            ensureProfile();
-        } else {
-            // Email confirmation required
-            showAuthMessage('Check your email to confirm your account, then log in.');
-        }
-        return { data };
-    } catch (e) {
-        return { error: { message: 'Signup request failed: ' + (e.message || 'network error') } };
-    }
-}
-
-async function authLogout() {
-    if (!supabaseClient) return;
-    await supabaseClient.auth.signOut();
-    currentUser = null;
-    authUpdateUI(null);
-    closeAuthDropdown();
-}
-
-/* ----- UI Updates ----- */
-function authUpdateUI(user) {
-    const btn = document.getElementById('authHeaderBtn');
+/* ----- UI Update ----- */
+function authUpdateUI(profile) {
+    var btn = document.getElementById('authHeaderBtn');
     if (!btn) return;
 
-    if (user) {
-        const name = user.user_metadata?.display_name || user.email?.split('@')[0] || 'User';
-        const initial = name.charAt(0).toUpperCase();
-        btn.innerHTML = '<div class="auth-user-btn" onclick="toggleAuthDropdown(event)">' +
-            '<div class="auth-avatar">' + initial + '</div>' +
-            '<span style="font-size:0.7rem;color:#FFE082;">' + escapeHTML(name) + '</span>' +
-            '<div id="authDropdown" class="auth-dropdown" style="display:none;">' +
-                '<div onclick="authLogout()">Sign Out</div>' +
-            '</div>' +
-        '</div>';
+    if (profile) {
+        var initial = profile.display_name.charAt(0).toUpperCase();
+        btn.innerHTML =
+            '<div class="auth-user-btn" onclick="toggleAuthDropdown(event)">' +
+                '<div class="auth-avatar" style="background:' + profile.color + ';">' + initial + '</div>' +
+                '<span style="font-size:0.7rem;color:#FFE082;">' + escapeHTML(profile.display_name) + '</span>' +
+                '<div id="authDropdown" class="auth-dropdown" style="display:none;">' +
+                    '<div onclick="authLogout()">Sign Out</div>' +
+                '</div>' +
+            '</div>';
         btn.removeAttribute('onclick');
         btn.style.cursor = 'default';
     } else {
@@ -161,7 +65,7 @@ function escapeHTML(str) {
     return div.innerHTML;
 }
 
-/* ----- Auth Dropdown ----- */
+/* ----- Dropdown ----- */
 function toggleAuthDropdown(e) {
     e.stopPropagation();
     var dd = document.getElementById('authDropdown');
@@ -174,40 +78,35 @@ function closeAuthDropdown() {
     if (dd) dd.style.display = 'none';
 }
 
-// Close dropdown on outside click
 document.addEventListener('click', function(e) {
-    if (!e.target.closest('.auth-user-btn')) {
-        closeAuthDropdown();
-    }
+    if (!e.target.closest('.auth-user-btn')) closeAuthDropdown();
 });
+
+/* ----- Logout ----- */
+function authLogout() {
+    sbmToken = null;
+    sbmProfile = null;
+    localStorage.removeItem('sbmToken');
+    closeAuthDropdown();
+    authUpdateUI(null);
+    showToast('Signed out');
+}
 
 /* ----- Auth Modal ----- */
 function showAuthModal(mode) {
-    // Remove any existing modal
     closeAuthModal();
-
     var isLogin = mode === 'login';
-    var title = isLogin ? 'Sign In' : 'Create Account';
-    var btnLabel = isLogin ? 'Sign In' : 'Sign Up';
-    var toggleText = isLogin
-        ? "Don't have an account? <a onclick=\"switchAuthMode('signup')\">Sign Up</a>"
-        : "Already have an account? <a onclick=\"switchAuthMode('login')\">Sign In</a>";
-
-    var nameField = isLogin ? '' :
-        '<input type="text" id="authDisplayName" placeholder="Display Name" autocomplete="name">';
 
     var html =
-        '<div class="auth-backdrop" id="authBackdrop" onclick="onBackdropClick(event)">' +
+        '<div class="auth-backdrop" id="authBackdrop" onclick="if(event.target.id===\'authBackdrop\')closeAuthModal()">' +
             '<div class="auth-modal" onclick="event.stopPropagation()">' +
                 '<button class="auth-close" onclick="closeAuthModal()">&times;</button>' +
-                '<h2>' + title + '</h2>' +
+                '<div style="display:flex;gap:0;margin-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.1);">' +
+                    '<div class="login-tab' + (isLogin ? ' active' : '') + '" onclick="switchAuthMode(\'login\')" style="flex:1;text-align:center;padding:10px;cursor:pointer;font-weight:700;font-size:0.85rem;color:' + (isLogin ? '#FFE082' : 'rgba(255,255,255,0.4)') + ';border-bottom:2px solid ' + (isLogin ? '#FFE082' : 'transparent') + ';">Sign In</div>' +
+                    '<div class="login-tab' + (!isLogin ? ' active' : '') + '" onclick="switchAuthMode(\'signup\')" style="flex:1;text-align:center;padding:10px;cursor:pointer;font-weight:700;font-size:0.85rem;color:' + (!isLogin ? '#FFE082' : 'rgba(255,255,255,0.4)') + ';border-bottom:2px solid ' + (!isLogin ? '#FFE082' : 'transparent') + ';">Register</div>' +
+                '</div>' +
                 '<div class="auth-error" id="authError"></div>' +
-                nameField +
-                '<input type="email" id="authEmail" placeholder="Email" autocomplete="email">' +
-                '<input type="password" id="authPassword" placeholder="Password" autocomplete="' + (isLogin ? 'current-password' : 'new-password') + '">' +
-                '<button class="auth-btn" onclick="handleAuthSubmit(\'' + mode + '\')">' + btnLabel + '</button>' +
-                '<div class="auth-toggle">' + toggleText + '</div>' +
-                '<div id="authMessage" style="text-align:center;margin-top:12px;font-size:0.75rem;color:#22c55e;min-height:18px;"></div>' +
+                (isLogin ? buildSigninForm() : buildRegisterForm()) +
             '</div>' +
         '</div>';
 
@@ -216,24 +115,45 @@ function showAuthModal(mode) {
     container.innerHTML = html;
     document.body.appendChild(container);
 
-    // Focus the first input
-    setTimeout(function() {
-        var first = isLogin
-            ? document.getElementById('authEmail')
-            : document.getElementById('authDisplayName');
-        if (first) first.focus();
-    }, 100);
+    if (isLogin) loadCrewMembers();
+}
 
-    // Allow enter key to submit
-    var handleEnter = function(e) {
-        if (e.key === 'Enter') handleAuthSubmit(mode);
-    };
-    var emailInput = document.getElementById('authEmail');
-    var passInput = document.getElementById('authPassword');
-    if (emailInput) emailInput.addEventListener('keydown', handleEnter);
-    if (passInput) passInput.addEventListener('keydown', handleEnter);
-    var nameInput = document.getElementById('authDisplayName');
-    if (nameInput) nameInput.addEventListener('keydown', handleEnter);
+function buildSigninForm() {
+    return '<div id="signinForm">' +
+        '<select id="loginName" style="width:100%;padding:12px;background:#1a1a2e;border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:#fff;font-size:0.85rem;margin-bottom:10px;font-family:inherit;">' +
+            '<option value="">Select your name...</option>' +
+        '</select>' +
+        '<input type="password" id="loginPin" placeholder="4-digit PIN" maxlength="4" inputmode="numeric" pattern="[0-9]*" style="width:100%;padding:12px;background:#1a1a2e;border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:#fff;font-size:0.85rem;margin-bottom:14px;font-family:inherit;box-sizing:border-box;">' +
+        '<button onclick="doLogin()" style="width:100%;padding:12px;background:linear-gradient(135deg,#D4A017,#FFE082);color:#0D0D1A;border:none;border-radius:8px;font-weight:800;font-size:0.9rem;cursor:pointer;font-family:inherit;">SIGN IN</button>' +
+    '</div>';
+}
+
+function buildRegisterForm() {
+    var swatches = '';
+    SBM_COLORS.forEach(function(c, i) {
+        swatches += '<div class="color-swatch' + (i === 0 ? ' picked' : '') + '" data-color="' + c + '" onclick="pickColor(this)" style="width:28px;height:28px;border-radius:50%;background:' + c + ';cursor:pointer;border:2px solid ' + (i === 0 ? '#fff' : 'transparent') + ';"></div>';
+    });
+
+    return '<div id="registerForm">' +
+        '<input type="text" id="registerName" placeholder="Your producer name" style="width:100%;padding:12px;background:#1a1a2e;border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:#fff;font-size:0.85rem;margin-bottom:10px;font-family:inherit;box-sizing:border-box;">' +
+        '<input type="password" id="registerPin" placeholder="4-digit PIN" maxlength="4" inputmode="numeric" pattern="[0-9]*" style="width:100%;padding:12px;background:#1a1a2e;border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:#fff;font-size:0.85rem;margin-bottom:12px;font-family:inherit;box-sizing:border-box;">' +
+        '<div style="margin-bottom:14px;">' +
+            '<div style="font-size:0.7rem;color:rgba(255,255,255,0.4);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;">Pick your color</div>' +
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;">' + swatches + '</div>' +
+        '</div>' +
+        '<button onclick="doRegister()" style="width:100%;padding:12px;background:linear-gradient(135deg,#D4A017,#FFE082);color:#0D0D1A;border:none;border-radius:8px;font-weight:800;font-size:0.9rem;cursor:pointer;font-family:inherit;">CREATE PROFILE</button>' +
+    '</div>';
+}
+
+function loadCrewMembers() {
+    fetch('/api/crew/members').then(function(r) { return r.json(); }).then(function(data) {
+        var sel = document.getElementById('loginName');
+        if (!sel || !data.members) return;
+        sel.innerHTML = '<option value="">Select your name...</option>';
+        data.members.forEach(function(name) {
+            sel.innerHTML += '<option value="' + escapeHTML(name) + '">' + escapeHTML(name) + '</option>';
+        });
+    }).catch(function() {});
 }
 
 function switchAuthMode(mode) {
@@ -245,80 +165,86 @@ function closeAuthModal() {
     if (c) c.remove();
 }
 
-function onBackdropClick(e) {
-    if (e.target.id === 'authBackdrop') {
-        closeAuthModal();
-    }
+function pickColor(el) {
+    document.querySelectorAll('.color-swatch').forEach(function(s) {
+        s.classList.remove('picked');
+        s.style.border = '2px solid transparent';
+    });
+    el.classList.add('picked');
+    el.style.border = '2px solid #fff';
 }
 
-function showAuthError(msg) {
-    var el = document.getElementById('authError');
-    if (el) el.textContent = msg || '';
+function getSelectedColor() {
+    var picked = document.querySelector('.color-swatch.picked');
+    return picked ? picked.getAttribute('data-color') : '#818cf8';
 }
 
-function showAuthMessage(msg) {
-    var el = document.getElementById('authMessage');
-    if (el) el.textContent = msg || '';
-}
+/* ----- Login ----- */
+function doLogin() {
+    var name = document.getElementById('loginName').value;
+    var pin = document.getElementById('loginPin').value;
+    var errEl = document.getElementById('authError');
+    errEl.textContent = '';
+    if (!name) { errEl.textContent = 'Pick your name'; return; }
+    if (!pin || pin.length !== 4) { errEl.textContent = 'PIN must be 4 digits'; return; }
 
-async function handleAuthSubmit(mode) {
-    var email = (document.getElementById('authEmail')?.value || '').trim();
-    var password = (document.getElementById('authPassword')?.value || '').trim();
-
-    showAuthError('');
-    showAuthMessage('');
-
-    if (!email || !password) {
-        showAuthError('Email and password are required.');
-        return;
-    }
-
-    if (password.length < 6) {
-        showAuthError('Password must be at least 6 characters.');
-        return;
-    }
-
-    // Disable button while processing
-    var btn = document.querySelector('.auth-modal .auth-btn');
-    if (btn) {
-        btn.disabled = true;
-        btn.textContent = 'Please wait...';
-    }
-
-    var result;
-    if (mode === 'login') {
-        result = await authLogin(email, password);
-    } else {
-        var displayName = (document.getElementById('authDisplayName')?.value || '').trim();
-        result = await authSignup(email, password, displayName);
-    }
-
-    if (result && result.error) {
-        showAuthError(result.error.message || 'Something went wrong.');
-        if (btn) {
-            btn.disabled = false;
-            btn.textContent = mode === 'login' ? 'Sign In' : 'Sign Up';
+    fetch('/api/crew/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name, pin: pin })
+    }).then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+    .then(function(res) {
+        if (res.ok && res.data.token) {
+            sbmToken = res.data.token;
+            sbmProfile = res.data.profile;
+            localStorage.setItem('sbmToken', sbmToken);
+            authUpdateUI(sbmProfile);
+            closeAuthModal();
+            showToast('Welcome, ' + sbmProfile.display_name + '!');
+        } else {
+            errEl.textContent = res.data.error || 'Login failed';
         }
-    }
+    }).catch(function() {
+        errEl.textContent = 'Server error';
+    });
 }
 
-/* ----- Ensure Profile Row Exists ----- */
-async function ensureProfile() {
-    try {
-        const headers = await getAuthHeadersAsync();
-        if (!headers.Authorization) return;
-        await fetch('/api/auth/ensure-profile', {
-            method: 'POST',
-            headers: headers,
-        });
-    } catch (e) { /* silent */ }
+/* ----- Register ----- */
+function doRegister() {
+    var name = (document.getElementById('registerName').value || '').trim();
+    var pin = document.getElementById('registerPin').value;
+    var color = getSelectedColor();
+    var errEl = document.getElementById('authError');
+    errEl.textContent = '';
+    if (!name || name.length < 2) { errEl.textContent = 'Name must be at least 2 characters'; return; }
+    if (!pin || pin.length !== 4) { errEl.textContent = 'PIN must be 4 digits'; return; }
+
+    fetch('/api/crew/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name, pin: pin, color: color })
+    }).then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+    .then(function(res) {
+        if (res.ok && res.data.token) {
+            sbmToken = res.data.token;
+            sbmProfile = res.data.profile;
+            localStorage.setItem('sbmToken', sbmToken);
+            authUpdateUI(sbmProfile);
+            closeAuthModal();
+            showToast('Profile created! Welcome, ' + sbmProfile.display_name);
+        } else {
+            errEl.textContent = res.data.error || 'Registration failed';
+        }
+    }).catch(function() {
+        errEl.textContent = 'Server error';
+    });
 }
 
 /* ----- Init on load ----- */
 (function() {
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initSupabase);
+        document.addEventListener('DOMContentLoaded', initAuth);
     } else {
-        initSupabase();
+        initAuth();
     }
 })();
