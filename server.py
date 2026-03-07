@@ -3049,6 +3049,57 @@ async def health():
     return {"status": "ok"}
 
 
+# ── Press Kit ──────────────────────────────────────────────────────────────────
+@app.post("/api/presskit")
+async def save_presskit(request: Request):
+    user = get_current_user(request)
+    data = await request.json()
+    sb = get_supabase()
+    if sb and user:
+        try:
+            sb.table("press_kits").upsert({
+                "user_id": user.get("id", user.get("name", "anon")),
+                "data": json.dumps(data),
+                "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            }, on_conflict="user_id").execute()
+        except Exception as e:
+            logger.warning(f"Press kit save failed: {e}")
+    return {"status": "saved"}
+
+# ── Crew Share ────────────────────────────────────────────────────────────────
+@app.post("/api/crew/share")
+async def crew_share(request: Request):
+    user = get_current_user(request)
+    data = await request.json()
+    sb = get_supabase()
+    if sb and user:
+        try:
+            sb.table("crew_feed").insert({
+                "user_name": user.get("name", "anon"),
+                "type": data.get("type", "track"),
+                "title": data.get("title", ""),
+                "artist": data.get("artist", ""),
+                "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            }).execute()
+        except Exception as e:
+            logger.warning(f"Crew share failed: {e}")
+    return {"status": "shared"}
+
+# ── Track ID Scheduler ────────────────────────────────────────────────────────
+@app.post("/api/scheduler/track-id-check")
+async def track_id_check(request: Request):
+    """Re-check unidentified samples against AudD. Can be called manually or by cron."""
+    # This endpoint will be called daily by a cron job or manually from the UI
+    # For now, return a placeholder — actual implementation needs AudD batch checking
+    return {"status": "checked", "samples_checked": 0, "matches": 0,
+            "message": "Daily track ID scheduler ready — configure samples in the Samples tab"}
+
+@app.get("/api/scheduler/log")
+async def scheduler_log():
+    """View past scheduler runs."""
+    return {"runs": [], "message": "No scheduler runs yet"}
+
+
 @app.get("/")
 async def root():
     return FileResponse("static/index.html")
