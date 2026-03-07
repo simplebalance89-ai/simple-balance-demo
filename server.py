@@ -2311,21 +2311,31 @@ async def _build_profile_from_spotify(favorites: list) -> dict | None:
 # ── Crew Auth (PIN-based profile selector) ────────────────────────────────────
 
 SBM_CREW = {
-    "J.A.W.": {"color": "#10B981", "is_admin": False, "links": {}},
+    "J.A.W.": {"color": "#10B981", "is_admin": False, "links": {
+        "beatport": "https://www.beatport.com/search?q=J.A.W.",
+    }},
     "Chinny Beatz": {"color": "#E879F9", "is_admin": False, "links": {
         "soundcloud": "https://soundcloud.com/chinny-beatz",
+        "beatport": "https://www.beatport.com/search?q=Chinny+Beatz",
     }},
     "Pete Dekan": {"color": "#818cf8", "is_admin": True, "links": {
         "soundcloud": "https://soundcloud.com/peter-wilson-30",
+        "beatport": "https://www.beatport.com/search?q=Peter+Wilson+30",
     }},
-    "CGReyes": {"color": "#F59E0B", "is_admin": False, "links": {}},
-    "TECHNOLASKO": {"color": "#EF4444", "is_admin": False, "links": {}},
+    "CGReyes": {"color": "#F59E0B", "is_admin": False, "links": {
+        "beatport": "https://www.beatport.com/search?q=CGReyes",
+    }},
+    "TECHNOLASKO": {"color": "#EF4444", "is_admin": False, "links": {
+        "beatport": "https://www.beatport.com/search?q=TECHNOLASKO",
+    }},
     "Jose Alejo": {"color": "#06B6D4", "is_admin": False, "links": {
         "soundcloud": "https://soundcloud.com/jose-alejo",
+        "beatport": "https://www.beatport.com/search?q=Jose+Alejo",
     }},
     "Willis Haltom": {"color": "#A78BFA", "is_admin": False, "links": {
         "spotify": "https://open.spotify.com/artist/5H5oZW1d7pw77CNm4rOO1x",
         "soundcloud": "https://soundcloud.com/willis-haltom",
+        "beatport": "https://www.beatport.com/search?q=Willis+Haltom",
     }},
     "Guest": {"color": "#6B7280", "is_admin": False, "links": {}},
 }
@@ -2377,7 +2387,10 @@ async def crew_verify(request: Request):
 
 @app.get("/api/crew/members")
 async def crew_members():
-    return {"members": list(SBM_CREW.keys())}
+    members = []
+    for name, data in SBM_CREW.items():
+        members.append({"name": name, "color": data["color"], "links": data.get("links", {})})
+    return {"members": members}
 
 
 @app.get("/api/crew/profile/{name}")
@@ -2745,6 +2758,8 @@ async def api_status():
         "replicate": bool(get_secret("REPLICATE_API_TOKEN")),
         "spotify": bool(get_secret("SPOTIFY_CLIENT_ID") and get_secret("SPOTIFY_CLIENT_SECRET")),
         "tidal": bool(get_secret("TIDAL_CLIENT_ID") and get_secret("TIDAL_CLIENT_SECRET")),
+        "genius": bool(get_secret("GENIUS_API_TOKEN")),
+        "beatport": bool(get_secret("BEATPORT_CLIENT_ID") and get_secret("BEATPORT_CLIENT_SECRET")),
     }
 
 

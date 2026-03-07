@@ -42,12 +42,18 @@ function authUpdateUI(profile) {
 
     if (profile) {
         var initial = profile.display_name.charAt(0).toUpperCase();
+        var links = profile.links || {};
+        var linkBtns = '';
+        if (links.spotify) linkBtns += '<div onclick="window.open(\'' + links.spotify + '\',\'_blank\')" style="color:#1DB954;">Spotify</div>';
+        if (links.soundcloud) linkBtns += '<div onclick="window.open(\'' + links.soundcloud + '\',\'_blank\')" style="color:#FF5500;">SoundCloud</div>';
+        if (links.beatport) linkBtns += '<div onclick="window.open(\'' + links.beatport + '\',\'_blank\')" style="color:#94D500;">Beatport</div>';
         btn.innerHTML =
             '<div class="auth-user-btn" onclick="toggleAuthDropdown(event)">' +
                 '<div class="auth-avatar" style="background:' + profile.color + ';">' + initial + '</div>' +
                 '<span style="font-size:0.7rem;color:#FFE082;">' + escapeHTML(profile.display_name) + '</span>' +
                 '<div id="authDropdown" class="auth-dropdown" style="display:none;">' +
-                    '<div onclick="authLogout()">Sign Out</div>' +
+                    linkBtns +
+                    '<div onclick="authLogout()" style="border-top:1px solid rgba(255,255,255,0.1);margin-top:4px;padding-top:8px;">Sign Out</div>' +
                 '</div>' +
             '</div>';
         btn.removeAttribute('onclick');
@@ -150,8 +156,10 @@ function loadCrewMembers() {
         var sel = document.getElementById('loginName');
         if (!sel || !data.members) return;
         sel.innerHTML = '<option value="">Select your name...</option>';
-        data.members.forEach(function(name) {
-            sel.innerHTML += '<option value="' + escapeHTML(name) + '">' + escapeHTML(name) + '</option>';
+        data.members.forEach(function(m) {
+            var name = typeof m === 'string' ? m : m.name;
+            var color = typeof m === 'object' ? m.color : '';
+            sel.innerHTML += '<option value="' + escapeHTML(name) + '" style="color:' + color + ';">' + escapeHTML(name) + '</option>';
         });
     }).catch(function() {});
 }
