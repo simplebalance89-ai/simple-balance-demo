@@ -2885,6 +2885,20 @@ async def get_error_log(limit: int = 50):
     """Return recent error log entries."""
     return {"errors": list(_error_log)[:limit], "total": len(_error_log)}
 
+@app.post("/api/errors")
+async def post_error_log(request: Request):
+    """Accept error reports from frontend JS."""
+    try:
+        body = await request.json()
+        log_error(
+            body.get("source", "frontend"),
+            body.get("error", "unknown"),
+            body.get("stack", ""),
+        )
+    except Exception:
+        pass
+    return {"status": "ok"}
+
 
 # ── Admin Dashboard ──────────────────────────────────────────────────────────
 

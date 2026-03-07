@@ -103,6 +103,16 @@
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
+window.onerror = function(msg, url, line, col, error) {
+  fetch('/api/errors', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({source:'frontend', error:msg, stack: error ? error.stack : url+':'+line+':'+col})
+  }).catch(function(){});
+};
+window.addEventListener('unhandledrejection', function(e) {
+  fetch('/api/errors', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({source:'frontend', error: e.reason ? (e.reason.message||String(e.reason)) : 'Unhandled rejection', stack: e.reason ? e.reason.stack : ''})
+  }).catch(function(){});
+});
 </script>
 </body>
 </html>
