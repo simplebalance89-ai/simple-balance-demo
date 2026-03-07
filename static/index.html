@@ -106,5 +106,198 @@ window.addEventListener('unhandledrejection', function(e) {
   }).catch(function(){});
 });
 </script>
+
+<!-- J.A.W. Floating DJ Agent -->
+<style>
+.jaw-fab{
+    position:fixed;bottom:24px;right:24px;z-index:500;
+    width:60px;height:60px;border-radius:18px;border:none;
+    background:linear-gradient(135deg,#D4A017,#B8860B);
+    color:#0D0D1A;font-size:24px;cursor:pointer;
+    box-shadow:0 8px 32px rgba(212,160,23,0.5);
+    transition:all 0.3s;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1px;
+}
+.jaw-fab:hover{transform:scale(1.08);box-shadow:0 12px 48px rgba(212,160,23,0.6);}
+.jaw-fab.open{background:#C41E3A;color:#fff;}
+.jaw-fab.listening{background:#10B981;animation:jaw-pulse 1.5s ease infinite;}
+.jaw-fab-label{font-size:7px;font-weight:900;letter-spacing:1.5px;text-transform:uppercase;}
+@keyframes jaw-pulse{0%,100%{box-shadow:0 0 0 0 rgba(16,185,129,0.4);}50%{box-shadow:0 0 0 14px rgba(16,185,129,0);}}
+
+.jaw-panel{
+    position:fixed;bottom:96px;right:24px;z-index:500;
+    width:380px;max-width:calc(100vw - 32px);height:500px;max-height:calc(100vh - 140px);
+    background:rgba(13,13,26,0.97);border:1px solid rgba(212,160,23,0.2);
+    border-radius:20px;overflow:hidden;display:none;flex-direction:column;
+    box-shadow:0 24px 80px rgba(0,0,0,0.7),0 0 40px rgba(212,160,23,0.1);
+    backdrop-filter:blur(24px);
+}
+.jaw-panel.visible{display:flex;}
+.jaw-panel-header{
+    padding:14px 16px;border-bottom:1px solid rgba(212,160,23,0.1);
+    display:flex;align-items:center;gap:10px;
+}
+.jaw-panel-avatar{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#D4A017,#B8860B);display:flex;align-items:center;justify-content:center;font-size:18px;}
+.jaw-panel-name{font-family:'Playfair Display',serif;color:#FFE082;font-size:1rem;font-weight:700;}
+.jaw-panel-sub{font-size:0.65rem;color:#8A7A5A;}
+.jaw-messages{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:8px;}
+.jaw-msg{max-width:85%;padding:10px 14px;border-radius:14px;font-size:0.82rem;line-height:1.5;}
+.jaw-msg.user{align-self:flex-end;background:rgba(212,160,23,0.15);color:#FFE082;border-bottom-right-radius:4px;}
+.jaw-msg.assistant{align-self:flex-start;background:rgba(255,255,255,0.04);color:#E0C8A0;border-bottom-left-radius:4px;}
+.jaw-msg .jaw-label{font-size:0.6rem;color:#D4A017;font-weight:800;letter-spacing:1px;margin-bottom:4px;}
+.jaw-input-row{padding:10px 12px;border-top:1px solid rgba(212,160,23,0.1);display:flex;gap:8px;align-items:center;}
+.jaw-input{flex:1;padding:10px 14px;border-radius:14px;border:1px solid rgba(212,160,23,0.15);background:rgba(255,255,255,0.03);color:#FFFEF7;font-family:'Nunito',sans-serif;font-size:0.85rem;outline:none;}
+.jaw-input:focus{border-color:rgba(212,160,23,0.4);}
+.jaw-send-btn{width:38px;height:38px;border-radius:12px;border:none;background:linear-gradient(135deg,#D4A017,#B8860B);color:#0D0D1A;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;}
+.jaw-mic-btn{width:38px;height:38px;border-radius:12px;border:none;background:rgba(255,255,255,0.05);color:#D4A017;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;}
+.jaw-mic-btn.active{background:#10B981;color:#fff;}
+@media(max-width:768px){
+    .jaw-fab{bottom:16px;right:16px;width:54px;height:54px;}
+    .jaw-panel{bottom:80px;right:8px;left:8px;width:auto;height:calc(100vh - 120px);max-height:none;border-radius:16px;}
+}
+</style>
+
+<!-- J.A.W. FAB -->
+<button class="jaw-fab" id="jawFab" onclick="toggleJawPanel()">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+    <span class="jaw-fab-label">J.A.W.</span>
+</button>
+
+<!-- J.A.W. Chat Panel -->
+<div class="jaw-panel" id="jawPanel">
+    <div class="jaw-panel-header">
+        <div class="jaw-panel-avatar">🎙️</div>
+        <div>
+            <div class="jaw-panel-name">J.A.W.</div>
+            <div class="jaw-panel-sub">Your AI DJ Companion</div>
+        </div>
+    </div>
+    <div class="jaw-messages" id="jawAgentMessages">
+        <div class="jaw-msg assistant"><div class="jaw-label">J.A.W.</div>Hey — I'm your DJ companion. Ask me about mixing, keys, energy flow, set building, or anything production. Tap the mic to talk.</div>
+    </div>
+    <div class="jaw-input-row">
+        <button class="jaw-mic-btn" id="jawMicBtn" onclick="toggleJawVoice()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        </button>
+        <input class="jaw-input" id="jawAgentInput" placeholder="Ask J.A.W. anything..." onkeydown="if(event.key==='Enter')sendJawAgent()">
+        <button class="jaw-send-btn" onclick="sendJawAgent()">&#8593;</button>
+    </div>
+</div>
+
+<script>
+/* J.A.W. Floating Agent */
+var jawPanelOpen = false;
+var jawHistory = [];
+var jawRecognition = null;
+var jawListening = false;
+
+function toggleJawPanel() {
+    var panel = document.getElementById('jawPanel');
+    var fab = document.getElementById('jawFab');
+    jawPanelOpen = !jawPanelOpen;
+    if (jawPanelOpen) {
+        panel.classList.add('visible');
+        fab.classList.add('open');
+        fab.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+        document.getElementById('jawAgentInput').focus();
+    } else {
+        panel.classList.remove('visible');
+        fab.classList.remove('open');
+        fab.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg><span class="jaw-fab-label">J.A.W.</span>';
+        if (jawListening) toggleJawVoice();
+    }
+}
+
+function sendJawAgent() {
+    var input = document.getElementById('jawAgentInput');
+    var text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    var msgs = document.getElementById('jawAgentMessages');
+    msgs.innerHTML += '<div class="jaw-msg user">' + escapeHTML(text) + '</div>';
+    msgs.innerHTML += '<div class="jaw-msg assistant" id="jawPendingMsg"><div class="jaw-label">J.A.W.</div><span style="color:#8A7A5A;">Thinking...</span></div>';
+    msgs.scrollTop = msgs.scrollHeight;
+
+    jawHistory.push({role: 'user', content: text});
+
+    fetch('/api/chat', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({messages: jawHistory})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        var pending = document.getElementById('jawPendingMsg');
+        if (data.error) {
+            if (pending) pending.innerHTML = '<div class="jaw-label">J.A.W.</div><span style="color:#C41E3A;">Error: ' + data.error + '</span>';
+            return;
+        }
+        var reply = data.response || 'No response';
+        jawHistory.push({role: 'assistant', content: reply});
+        if (pending) pending.outerHTML = '<div class="jaw-msg assistant"><div class="jaw-label">J.A.W.</div>' + reply.replace(/\n/g, '<br>') + '</div>';
+        msgs.scrollTop = msgs.scrollHeight;
+        // Speak the reply
+        if (jawListening || window._jawAutoSpeak) speakJaw(reply);
+    })
+    .catch(function() {
+        var pending = document.getElementById('jawPendingMsg');
+        if (pending) pending.innerHTML = '<div class="jaw-label">J.A.W.</div><span style="color:#C41E3A;">Connection error.</span>';
+    });
+}
+
+function toggleJawVoice() {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        alert('Voice not supported in this browser. Try Chrome.');
+        return;
+    }
+    var mic = document.getElementById('jawMicBtn');
+    var fab = document.getElementById('jawFab');
+    if (jawListening) {
+        jawListening = false;
+        mic.classList.remove('active');
+        fab.classList.remove('listening');
+        if (jawRecognition) jawRecognition.stop();
+        return;
+    }
+    jawListening = true;
+    mic.classList.add('active');
+    fab.classList.remove('open');
+    fab.classList.add('listening');
+    var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    jawRecognition = new SpeechRec();
+    jawRecognition.continuous = false;
+    jawRecognition.interimResults = false;
+    jawRecognition.lang = 'en-US';
+    jawRecognition.onresult = function(e) {
+        var text = e.results[0][0].transcript;
+        document.getElementById('jawAgentInput').value = text;
+        sendJawAgent();
+    };
+    jawRecognition.onerror = function() {
+        jawListening = false;
+        mic.classList.remove('active');
+        fab.classList.remove('listening');
+    };
+    jawRecognition.onend = function() {
+        jawListening = false;
+        mic.classList.remove('active');
+        fab.classList.remove('listening');
+    };
+    jawRecognition.start();
+    // Auto-open panel if not open
+    if (!jawPanelOpen) toggleJawPanel();
+}
+
+function speakJaw(text) {
+    if (!('speechSynthesis' in window)) return;
+    // Strip HTML tags
+    var clean = text.replace(/<[^>]+>/g, ' ').replace(/&[^;]+;/g, ' ');
+    if (clean.length > 300) clean = clean.substring(0, 300) + '...';
+    var utterance = new SpeechSynthesisUtterance(clean);
+    utterance.rate = 1.05;
+    utterance.pitch = 0.95;
+    speechSynthesis.speak(utterance);
+}
+</script>
+
 </body>
 </html>

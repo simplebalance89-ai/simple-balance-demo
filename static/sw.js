@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sbm-v5-' + '20260307g';
+const CACHE_NAME = 'sbm-v6-' + '20260307h';
 const SHELL_ASSETS = [
   '/',
   '/static/css/main.css',
