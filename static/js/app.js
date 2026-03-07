@@ -97,7 +97,7 @@ function buildExperienceInto(area) {
 }
 
 /* ===== FEATURE CARD BUILDER ===== */
-var TESTING_MODES = ['mastering']; // Real backend TBD — show amber
+var TESTING_MODES = []; // All modes now have real backends
 function featureCard(mode, icon, title, desc) {
     const req = API_REQUIREMENTS[mode];
     const available = !req || apiStatus[req];

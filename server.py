@@ -1031,52 +1031,113 @@ async def digest_url_status(job_id: str):
 
 @app.post("/api/analyze")
 async def analyze(file: UploadFile = File(...)):
-    """Analyze an audio file for mastering using Azure OpenAI."""
-    client = get_ai_client()
-    if not client:
-        return JSONResponse({"error": "Azure OpenAI not configured"}, status_code=503)
-
+    """Analyze an audio file using FFmpeg for real stats + Azure OpenAI for recommendations."""
     filename = file.filename or "unknown.mp3"
     file_data = await file.read()
     file_size_mb = round(len(file_data) / (1024 * 1024), 2)
 
+    if len(file_data) == 0:
+        return JSONResponse({"error": "Empty file"}, status_code=400)
+
+    # Step 1: Real audio analysis with FFmpeg
+    ffmpeg_stats = {}
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
+            tmp.write(file_data)
+            tmp_path = tmp.name
+
+        # Get loudness stats (LUFS, true peak, dynamic range)
+        proc = subprocess.run(
+            ["ffmpeg", "-i", tmp_path, "-af", "loudnorm=print_format=json", "-f", "null", "-"],
+            capture_output=True, text=True, timeout=60
+        )
+        stderr = proc.stderr
+        # Parse loudnorm JSON from ffmpeg output
+        if "input_i" in stderr:
+            import re
+            json_match = re.search(r'\{[^}]*"input_i"[^}]*\}', stderr, re.DOTALL)
+            if json_match:
+                loudnorm = json.loads(json_match.group())
+                ffmpeg_stats["lufs"] = round(float(loudnorm.get("input_i", -14)), 1)
+                ffmpeg_stats["true_peak"] = round(float(loudnorm.get("input_tp", -1)), 1)
+                ffmpeg_stats["loudness_range"] = round(float(loudnorm.get("input_lra", 7)), 1)
+                ffmpeg_stats["threshold"] = round(float(loudnorm.get("input_thresh", -24)), 1)
+
+        # Get duration and format info
+        probe = subprocess.run(
+            ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", tmp_path],
+            capture_output=True, text=True, timeout=30
+        )
+        if probe.returncode == 0:
+            probe_data = json.loads(probe.stdout)
+            fmt = probe_data.get("format", {})
+            ffmpeg_stats["duration"] = round(float(fmt.get("duration", 0)), 1)
+            ffmpeg_stats["bitrate"] = round(int(fmt.get("bit_rate", 0)) / 1000)
+            streams = probe_data.get("streams", [])
+            for s in streams:
+                if s.get("codec_type") == "audio":
+                    ffmpeg_stats["sample_rate"] = int(s.get("sample_rate", 0))
+                    ffmpeg_stats["channels"] = s.get("channels", 2)
+
+        os.unlink(tmp_path)
+    except Exception as e:
+        logger.warning(f"FFmpeg analysis failed: {e}")
+        try:
+            os.unlink(tmp_path)
+        except Exception:
+            pass
+
+    # Step 2: AI summary with real data
+    client = get_ai_client()
     model = get_secret("AZURE_OPENAI_MODEL", "gpt-4o")
 
-    system_prompt = """You are an expert audio mastering engineer AI. Given an audio filename and file metadata, provide a realistic mastering analysis. Return ONLY valid JSON with this exact structure:
+    if client:
+        system_prompt = """You are an expert audio mastering engineer. Given REAL audio analysis data from FFmpeg, provide mastering recommendations. Return ONLY valid JSON:
 {
-  "bpm": <number>,
-  "key": "<musical key like F minor, A major, etc>",
-  "camelot": "<camelot code like 4A, 8B, etc>",
-  "lufs": <number, negative, typical range -6 to -14>,
-  "true_peak": <number, negative, typical range -0.1 to -2.0>,
-  "dynamic_range": <number, in dB, typical 4-12>,
-  "recommendations": [
-    "<recommendation 1>",
-    "<recommendation 2>",
-    "<recommendation 3>",
-    "<recommendation 4>"
-  ],
-  "genre_detected": "<detected genre>",
-  "quality_score": <number 1-100>
+  "bpm": <estimate from filename or 0 if unknown>,
+  "key": "<musical key estimate or 'Unknown'>",
+  "camelot": "<camelot code or 'N/A'>",
+  "lufs": <from data>,
+  "true_peak": <from data>,
+  "dynamic_range": <from data or estimate>,
+  "recommendations": ["<rec 1>", "<rec 2>", "<rec 3>", "<rec 4>"],
+  "genre_detected": "<from filename or 'Electronic'>",
+  "quality_score": <1-100 based on LUFS, peak, dynamic range>
 }
-Infer genre, BPM, and key from the filename. If the filename has no useful info, generate plausible values for an electronic music track. Make recommendations specific and actionable."""
+Base quality_score on: LUFS between -9 and -14 is good, true peak below -1dB is safe, wider dynamic range is better. Make recommendations SPECIFIC to the actual measurements."""
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Filename: {filename}\nFile size: {file_size_mb} MB\nFFmpeg analysis: {json.dumps(ffmpeg_stats)}"}
+                ],
+                temperature=0.3,
+                response_format={"type": "json_object"}
+            )
+            result = json.loads(response.choices[0].message.content)
+        except Exception:
+            result = {}
+    else:
+        result = {}
 
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Analyze this audio file for mastering:\nFilename: {filename}\nFile size: {file_size_mb} MB\nContent type: {file.content_type or 'audio/mpeg'}"}
-            ],
-            temperature=0.3,
-            response_format={"type": "json_object"}
-        )
-        result = json.loads(response.choices[0].message.content)
-        result["filename"] = filename
-        result["file_size_mb"] = file_size_mb
-        return result
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+    # Merge real FFmpeg data (overrides GPT guesses)
+    if ffmpeg_stats.get("lufs"):
+        result["lufs"] = ffmpeg_stats["lufs"]
+    if ffmpeg_stats.get("true_peak"):
+        result["true_peak"] = ffmpeg_stats["true_peak"]
+    if ffmpeg_stats.get("loudness_range"):
+        result["dynamic_range"] = ffmpeg_stats["loudness_range"]
+
+    result["filename"] = filename
+    result["file_size_mb"] = file_size_mb
+    result["duration_sec"] = ffmpeg_stats.get("duration", 0)
+    result["bitrate_kbps"] = ffmpeg_stats.get("bitrate", 0)
+    result["sample_rate"] = ffmpeg_stats.get("sample_rate", 0)
+    result["channels"] = ffmpeg_stats.get("channels", 0)
+    result["analysis_source"] = "ffmpeg" if ffmpeg_stats else "ai_estimate"
+
+    return result
 
 
 # ── Stem Separation (Replicate Demucs) ───────────────────────────────────────
