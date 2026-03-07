@@ -165,19 +165,19 @@ function renderHomeContent() {
     var avatarColor = (sbmProfile && sbmProfile.color) ? sbmProfile.color : '#D4A017';
     var initial = displayName.charAt(0).toUpperCase();
 
-    // Swim lane card builder
+    // Swim lane card builder — single column, horizontal cards
     function buildCards(list) {
         return list.map(function(f) {
             var statusBadge = f.status === 'live'
                 ? '<span class="feature-badge feature-badge-live">Live</span>'
                 : '<span class="feature-badge feature-badge-testing">Testing</span>';
             return '<div class="feature-card" onclick="selectTool(\'' + f.mode + '\')">' +
-                '<div class="feature-card-top">' +
-                    '<span class="feature-card-icon">' + f.icon + '</span>' +
-                    statusBadge +
+                '<span class="feature-card-icon">' + f.icon + '</span>' +
+                '<div class="feature-card-body">' +
+                    '<div class="feature-card-name">' + f.name + '</div>' +
+                    '<div class="feature-card-desc">' + f.desc + '</div>' +
                 '</div>' +
-                '<div class="feature-card-name">' + f.name + '</div>' +
-                '<div class="feature-card-desc">' + f.desc + '</div>' +
+                '<div class="feature-card-badge">' + statusBadge + '</div>' +
             '</div>';
         }).join('');
     }

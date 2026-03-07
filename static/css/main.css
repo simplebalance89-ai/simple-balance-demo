@@ -1162,7 +1162,6 @@ html { scroll-behavior: smooth; }
 
 /* ===== RESPONSIVE ===== */
 @media (max-width: 600px) {
-    .feature-grid { grid-template-columns: repeat(2, 1fr); }
     .connect-grid { grid-template-columns: 1fr; }
     .analysis-grid { grid-template-columns: 1fr; }
     .gen-details { grid-template-columns: repeat(3, 1fr); }
@@ -1172,7 +1171,6 @@ html { scroll-behavior: smooth; }
 @media (max-width: 400px) {
     .genre-grid { grid-template-columns: 1fr; }
     .mood-grid { grid-template-columns: 1fr; }
-    .feature-grid { grid-template-columns: 1fr; }
     .gen-details { grid-template-columns: 1fr; }
 }
 
@@ -1354,7 +1352,6 @@ html { scroll-behavior: smooth; }
     #app {
         -webkit-overflow-scrolling: touch;
     }
-    .feature-grid { grid-template-columns: repeat(2, 1fr); }
     .chat-msg.user { margin-left: 20px; }
     .chat-msg.assistant { margin-right: 20px; }
 }
@@ -1430,53 +1427,54 @@ html { scroll-behavior: smooth; }
 
 /* ===== FEATURE GRID ===== */
 .feature-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
-}
-@media (min-width: 769px) {
-    .feature-grid {
-        grid-template-columns: repeat(3, 1fr);
-        gap: 12px;
-    }
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 .feature-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
     background: var(--sbm-bg-card);
     border: 1px solid var(--sbm-border);
     border-radius: var(--sbm-radius-md);
-    padding: 16px 14px;
+    padding: 14px 16px;
     cursor: pointer;
     transition: all var(--sbm-transition);
 }
 .feature-card:hover {
     background: var(--sbm-bg-hover);
     border-color: var(--sbm-border-accent);
-    transform: translateY(-1px);
+    transform: translateX(2px);
 }
 .feature-card:active {
-    transform: translateY(0);
-}
-.feature-card-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 8px;
+    transform: translateX(0);
 }
 .feature-card-icon {
-    font-size: 1.5rem;
+    font-size: 1.6rem;
     line-height: 1;
+    flex-shrink: 0;
+    width: 36px;
+    text-align: center;
+}
+.feature-card-body {
+    flex: 1;
+    min-width: 0;
 }
 .feature-card-name {
     font-family: var(--sbm-font-display);
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     font-weight: 700;
     color: var(--sbm-accent-light);
-    margin-bottom: 4px;
 }
 .feature-card-desc {
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     color: var(--sbm-text-muted);
     line-height: 1.4;
+    margin-top: 2px;
+}
+.feature-card-badge {
+    flex-shrink: 0;
 }
 
 /* ===== FEATURE BADGES ===== */
