@@ -43,3 +43,11 @@ function buildAnalysisCard(label, value, detail) {
 function toggleSampleCard(el) {
     el.classList.toggle('expanded');
 }
+
+function showToast(msg, isError) {
+    var t = document.getElementById('sbmToast');
+    if (!t) return;
+    t.textContent = msg;
+    t.className = 'sbm-toast active' + (isError ? ' error' : '');
+    setTimeout(function() { t.className = 'sbm-toast'; }, 3000);
+}
