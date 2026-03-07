@@ -323,7 +323,7 @@ function buildGenerationExperience(name, modeName) {
     return `
         <div class="experience-title">
             <h2>${modeName}</h2>
-            <p>Pick a genre. Generate a beat.</p>
+            <p>Pick a genre or write your own prompt. Generate real audio with AI.</p>
         </div>
         <div class="genre-grid">
             <div class="genre-btn" onclick="generateBeat(this, 'progressive')">🌊 Progressive House</div>
@@ -331,7 +331,20 @@ function buildGenerationExperience(name, modeName) {
             <div class="genre-btn" onclick="generateBeat(this, 'deephouse')">🎧 Deep House</div>
             <div class="genre-btn" onclick="generateBeat(this, 'ambient')">🌙 Ambient</div>
         </div>
-        <div class="gen-result" id="genResult"></div>`;
+        <div style="width:100%;max-width:500px;margin-top:16px;">
+            <div style="font-size:0.75rem;color:rgba(255,255,255,0.4);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;">Custom Prompt</div>
+            <div style="display:flex;gap:8px;">
+                <input type="text" id="genPrompt" placeholder="melodic techno with driving bassline, 130 BPM" style="flex:1;padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#fff;font-family:inherit;font-size:0.85rem;">
+                <select id="genDuration" style="padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#fff;font-family:inherit;font-size:0.8rem;">
+                    <option value="8">8s</option>
+                    <option value="15">15s</option>
+                    <option value="30">30s</option>
+                </select>
+                <button onclick="generateAudio()" style="padding:10px 20px;border-radius:10px;border:none;background:linear-gradient(135deg,#D4A017,#B8860B);color:#0D0D1A;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap;">Generate</button>
+            </div>
+        </div>
+        <div class="gen-result" id="genResult"></div>
+        <div id="genAudioResult" style="display:none;margin-top:16px;width:100%;max-width:500px;"></div>`;
 }
 
 var GEN_DATA = {
@@ -399,6 +412,46 @@ function renderGenResult(container, d, isAI) {
             descHtml +
         '</div>';
     container.classList.add('visible');
+}
+
+function generateAudio() {
+    var prompt = (document.getElementById('genPrompt').value || '').trim();
+    if (!prompt) { showToast('Enter a prompt first', true); return; }
+    var duration = parseInt(document.getElementById('genDuration').value) || 8;
+    var container = document.getElementById('genAudioResult');
+    container.style.display = 'block';
+    container.innerHTML =
+        '<div style="text-align:center;padding:20px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:14px;">' +
+            '<div style="font-size:0.85rem;color:#D4A017;margin-bottom:8px;">Generating ' + duration + 's of audio...</div>' +
+            '<div style="font-size:0.7rem;color:rgba(255,255,255,0.4);">This can take 30-60 seconds. MusicGen is working.</div>' +
+            '<div style="width:100%;height:4px;background:rgba(255,255,255,0.06);border-radius:2px;margin-top:12px;overflow:hidden;">' +
+                '<div style="width:30%;height:100%;background:linear-gradient(90deg,#D4A017,#FFE082);border-radius:2px;animation:genPulse 2s ease-in-out infinite;"></div>' +
+            '</div>' +
+        '</div>';
+
+    fetch('/api/generate/audio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: prompt, duration: duration })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.error) {
+            container.innerHTML = '<div style="text-align:center;padding:16px;color:#EF4444;font-size:0.85rem;">' + data.error + '</div>';
+            return;
+        }
+        container.innerHTML =
+            '<div style="background:rgba(212,160,23,0.06);border:1px solid rgba(212,160,23,0.2);border-radius:14px;padding:20px;text-align:center;">' +
+                '<div style="font-family:\'Playfair Display\',serif;font-size:1rem;color:#FFE082;margin-bottom:4px;">Audio Generated</div>' +
+                '<div style="font-size:0.75rem;color:rgba(255,255,255,0.4);margin-bottom:12px;">' + data.duration + 's | MusicGen</div>' +
+                '<audio controls style="width:100%;margin-bottom:12px;border-radius:8px;" src="' + data.audio_url + '"></audio>' +
+                '<div style="font-size:0.7rem;color:rgba(255,255,255,0.3);margin-bottom:10px;word-break:break-all;">"' + (data.prompt || prompt) + '"</div>' +
+                '<a href="' + data.audio_url + '" download="generated_audio.wav" style="display:inline-block;padding:8px 20px;background:linear-gradient(135deg,#D4A017,#B8860B);color:#0D0D1A;border-radius:8px;text-decoration:none;font-weight:800;font-size:0.8rem;">Download</a>' +
+            '</div>';
+    })
+    .catch(function(err) {
+        container.innerHTML = '<div style="text-align:center;padding:16px;color:#EF4444;font-size:0.85rem;">Failed: ' + err.message + '</div>';
+    });
 }
 
 /* --- Stem Separation --- */

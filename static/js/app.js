@@ -97,12 +97,18 @@ function buildExperienceInto(area) {
 }
 
 /* ===== FEATURE CARD BUILDER ===== */
+var TESTING_MODES = ['mastering', 'events']; // Real backend TBD — show amber
 function featureCard(mode, icon, title, desc) {
     const req = API_REQUIREMENTS[mode];
     const available = !req || apiStatus[req];
-    const badge = available
-        ? '<span style="font-size:0.55rem;background:rgba(76,175,80,0.15);color:#4CAF50;padding:2px 6px;border-radius:4px;">READY</span>'
-        : '<span style="font-size:0.55rem;background:rgba(255,255,255,0.06);color:#666;padding:2px 6px;border-radius:4px;">NEEDS KEY</span>';
+    var badge;
+    if (TESTING_MODES.indexOf(mode) !== -1) {
+        badge = '<span style="font-size:0.55rem;background:rgba(245,158,11,0.15);color:#F59E0B;padding:2px 6px;border-radius:4px;">TESTING</span>';
+    } else if (available) {
+        badge = '<span style="font-size:0.55rem;background:rgba(76,175,80,0.15);color:#4CAF50;padding:2px 6px;border-radius:4px;">READY</span>';
+    } else {
+        badge = '<span style="font-size:0.55rem;background:rgba(255,255,255,0.06);color:#666;padding:2px 6px;border-radius:4px;">NEEDS KEY</span>';
+    }
     return `
         <div class="feature-card" onclick="launchMode('${mode}')">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
