@@ -598,6 +598,79 @@ async def _scan_audio_chunked(audio_path: str, token: str, progress_cb=None) -> 
     return parsed
 
 
+# ── Shazam via Azure OpenAI ───────────────────────────────────────────────────
+
+@app.post("/api/shazam")
+async def shazam_identify(file: UploadFile = File(...)):
+    """Identify a song from an audio clip using Azure OpenAI gpt-4o audio."""
+    import base64 as b64mod
+
+    client = get_ai_client()
+    if not client:
+        return JSONResponse({"error": "Azure OpenAI not configured"}, status_code=503)
+
+    file_data = await file.read()
+    if len(file_data) == 0:
+        return JSONResponse({"error": "Empty file"}, status_code=400)
+    if len(file_data) > 25 * 1024 * 1024:
+        return JSONResponse({"error": "File too large (max 25MB)"}, status_code=400)
+
+    # Determine mime type
+    content_type = file.content_type or "audio/mpeg"
+    audio_b64 = b64mod.b64encode(file_data).decode()
+
+    model = get_secret("AZURE_OPENAI_MODEL", "gpt-4o")
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are a music identification expert. Listen to the audio and identify the song. Return JSON with fields: title, artist, album (if known), year (if known), genre, confidence (high/medium/low). If you cannot identify it, return {\"title\": \"Unknown\", \"artist\": \"Unknown\", \"confidence\": \"low\", \"notes\": \"reason\"}."},
+                {"role": "user", "content": [
+                    {"type": "text", "text": "Identify this song:"},
+                    {"type": "input_audio", "input_audio": {"data": audio_b64, "format": content_type.split("/")[-1] if "/" in content_type else "mp3"}}
+                ]}
+            ],
+            temperature=0.1,
+            max_tokens=500,
+        )
+        result_text = resp.choices[0].message.content.strip()
+        # Try to parse as JSON
+        try:
+            if "```json" in result_text:
+                result_text = result_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in result_text:
+                result_text = result_text.split("```")[1].split("```")[0].strip()
+            result = json.loads(result_text)
+        except json.JSONDecodeError:
+            result = {"raw": result_text, "confidence": "low"}
+        return {"status": "ok", "result": result, "source": "azure_openai"}
+    except Exception as e:
+        logger.error(f"Shazam Azure error: {e}")
+        # Fallback to AudD if available
+        audd_token = get_secret("AUDD_API_TOKEN")
+        if audd_token:
+            try:
+                async with httpx.AsyncClient(timeout=15) as hc:
+                    audd_resp = await hc.post(
+                        "https://api.audd.io/",
+                        data={"api_token": audd_token, "return": "apple_music,spotify"},
+                        files={"file": ("clip.mp3", file_data, content_type)},
+                    )
+                    audd_data = audd_resp.json()
+                    if audd_data.get("result"):
+                        r = audd_data["result"]
+                        return {"status": "ok", "result": {
+                            "title": r.get("title", "Unknown"),
+                            "artist": r.get("artist", "Unknown"),
+                            "album": r.get("album", ""),
+                            "year": r.get("release_date", "")[:4] if r.get("release_date") else "",
+                            "confidence": "high",
+                        }, "source": "audd_fallback"}
+            except Exception:
+                pass
+        return JSONResponse({"error": f"Identification failed: {str(e)}"}, status_code=500)
+
+
 @app.post("/api/digestor")
 async def digestor(file: UploadFile = File(...)):
     """Extract tracklist from uploaded DJ mix via AudD Enterprise."""
@@ -2333,6 +2406,7 @@ SBM_CREW = {
     "CGReyes": {"color": "#F59E0B", "is_admin": False},
     "TECHNOLASKO": {"color": "#EF4444", "is_admin": False},
     "Jose Alejo": {"color": "#06B6D4", "is_admin": False},
+    "Willis Haltom": {"color": "#A78BFA", "is_admin": False},
     "Guest": {"color": "#6B7280", "is_admin": False},
 }
 _sbm_tokens = {}  # token -> profile dict
