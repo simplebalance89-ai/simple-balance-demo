@@ -1493,6 +1493,168 @@ var MODE_SAMPLES = {
     ]
 };
 
+/* ===== LIVE DJ SET AUDIT ===== */
+function buildLiveAuditExperience(name, modeName) {
+    return `
+        <div class="experience-title">
+            <h2>${modeName}</h2>
+            <p>Upload a DJ set for full analysis — tracklist, BPM flow, key transitions, energy curve, and transition recommendations.</p>
+        </div>
+        <div style="width:100%;max-width:600px;">
+
+            <!-- Upload -->
+            <div style="background:rgba(255,255,255,0.03);border:2px dashed rgba(196,30,58,0.3);border-radius:16px;padding:32px;text-align:center;margin-bottom:16px;cursor:pointer;" onclick="document.getElementById('auditMixFile').click()">
+                <div style="font-size:2.5rem;margin-bottom:8px;">🔍</div>
+                <div style="font-family:'Playfair Display',serif;font-size:1.1rem;color:#FFE082;margin-bottom:4px;">Drop your set here</div>
+                <div style="font-size:0.75rem;color:#8A7A5A;">MP3, WAV, M4A — we'll analyze everything</div>
+                <input type="file" id="auditMixFile" accept="audio/*" style="display:none" onchange="startLiveAudit(this)">
+            </div>
+
+            <!-- Pipeline status -->
+            <div id="auditPipeline" style="display:none;">
+                <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:20px;margin-bottom:16px;">
+                    <div style="font-size:0.85rem;font-weight:700;color:#FFE082;margin-bottom:12px;">Pipeline</div>
+                    <div id="auditStep1" class="audit-step" style="display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
+                        <span style="font-size:1rem;">⏳</span>
+                        <span style="font-size:0.8rem;color:#666;">Step 1: Audio analysis (BPM, key, loudness)</span>
+                    </div>
+                    <div id="auditStep2" class="audit-step" style="display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
+                        <span style="font-size:1rem;">⏳</span>
+                        <span style="font-size:0.8rem;color:#666;">Step 2: Track identification (AudD fingerprinting)</span>
+                    </div>
+                    <div id="auditStep3" class="audit-step" style="display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
+                        <span style="font-size:1rem;">⏳</span>
+                        <span style="font-size:0.8rem;color:#666;">Step 3: Transition analysis & recommendations</span>
+                    </div>
+                    <div id="auditStep4" class="audit-step" style="display:flex;gap:10px;align-items:center;padding:8px 0;">
+                        <span style="font-size:1rem;">⏳</span>
+                        <span style="font-size:0.8rem;color:#666;">Step 4: Set report generation</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results -->
+            <div id="auditResults"></div>
+        </div>`;
+}
+
+function startLiveAudit(input) {
+    var file = input.files[0];
+    if (!file) return;
+
+    document.getElementById('auditPipeline').style.display = 'block';
+    var results = document.getElementById('auditResults');
+    results.innerHTML = '';
+
+    // Step 1: Client-side audio analysis
+    updateAuditStep('auditStep1', 'running', 'Analyzing audio...');
+    analyzeAudioLocal(file).then(function(localAnalysis) {
+        updateAuditStep('auditStep1', 'done', 'BPM: ' + (localAnalysis.bpm || '?') + ' | Key: ' + (localAnalysis.key || '?'));
+
+        // Step 2: Upload for track ID via digestor
+        updateAuditStep('auditStep2', 'running', 'Identifying tracks...');
+        var formData = new FormData();
+        formData.append('file', file);
+
+        fetch('/api/digestor', { method: 'POST', body: formData })
+        .then(function(r) { return r.json(); })
+        .then(function(digestData) {
+            var tracks = digestData.tracks || digestData.tracklist || [];
+            updateAuditStep('auditStep2', 'done', tracks.length + ' tracks identified');
+
+            // Step 3: Transition analysis via AI
+            updateAuditStep('auditStep3', 'running', 'Analyzing transitions...');
+            var trackNames = tracks.map(function(t) { return (t.title || t.name || 'Unknown') + ' by ' + (t.artist || 'Unknown'); });
+
+            fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: 'Analyze this DJ set tracklist for transition quality. For each transition between tracks, rate it (smooth/decent/rough) and suggest what could improve it. Also note the overall BPM flow and energy curve. Tracklist: ' + trackNames.join(' → '),
+                    context: 'dj_set_audit'
+                })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(aiData) {
+                updateAuditStep('auditStep3', 'done', 'Transitions analyzed');
+                updateAuditStep('auditStep4', 'done', 'Report ready');
+
+                // Render full report
+                renderAuditReport(results, {
+                    file: file.name,
+                    bpm: localAnalysis.bpm,
+                    key: localAnalysis.key,
+                    loudness: localAnalysis.loudness,
+                    tracks: tracks,
+                    analysis: aiData.response || aiData.reply || 'Analysis complete.'
+                });
+            })
+            .catch(function() {
+                updateAuditStep('auditStep3', 'done', 'AI analysis unavailable — showing tracklist');
+                updateAuditStep('auditStep4', 'done', 'Report ready');
+                renderAuditReport(results, {
+                    file: file.name, bpm: localAnalysis.bpm, key: localAnalysis.key,
+                    loudness: localAnalysis.loudness, tracks: tracks, analysis: null
+                });
+            });
+        })
+        .catch(function() {
+            updateAuditStep('auditStep2', 'error', 'Track ID failed — try a shorter clip');
+        });
+    }).catch(function() {
+        updateAuditStep('auditStep1', 'error', 'Audio analysis failed');
+    });
+}
+
+function updateAuditStep(stepId, status, text) {
+    var el = document.getElementById(stepId);
+    if (!el) return;
+    var icons = { running: '🔄', done: '✅', error: '❌' };
+    var colors = { running: '#D4A017', done: '#22c55e', error: '#EF4444' };
+    el.innerHTML = '<span style="font-size:1rem;">' + (icons[status] || '⏳') + '</span>' +
+        '<span style="font-size:0.8rem;color:' + (colors[status] || '#666') + ';">' + text + '</span>';
+}
+
+function renderAuditReport(container, data) {
+    var tracksHtml = '';
+    if (data.tracks && data.tracks.length) {
+        tracksHtml = data.tracks.map(function(t, i) {
+            return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04);">' +
+                '<div style="width:28px;text-align:center;font-family:\'JetBrains Mono\',monospace;font-size:0.7rem;color:#666;">' + (i + 1) + '</div>' +
+                '<div style="flex:1;">' +
+                    '<div style="font-size:0.8rem;color:#fff;font-weight:600;">' + (t.title || t.name || 'Unknown') + '</div>' +
+                    '<div style="font-size:0.65rem;color:#8A7A5A;">' + (t.artist || '') + '</div>' +
+                '</div>' +
+                (t.timestamp ? '<div style="font-size:0.65rem;color:#666;font-family:\'JetBrains Mono\',monospace;">' + t.timestamp + '</div>' : '') +
+            '</div>';
+        }).join('');
+    }
+
+    container.innerHTML =
+        '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(212,160,23,0.2);border-radius:16px;padding:20px;margin-bottom:16px;">' +
+            '<div style="font-family:\'Playfair Display\',serif;font-size:1.1rem;color:#FFE082;margin-bottom:12px;">Set Report: ' + data.file + '</div>' +
+            '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;">' +
+                '<div style="background:rgba(212,160,23,0.1);border-radius:10px;padding:10px 16px;text-align:center;">' +
+                    '<div style="font-size:0.6rem;color:#8A7A5A;text-transform:uppercase;letter-spacing:1px;">BPM</div>' +
+                    '<div style="font-size:1.2rem;font-weight:700;color:#FFE082;">' + (data.bpm || '?') + '</div>' +
+                '</div>' +
+                '<div style="background:rgba(212,160,23,0.1);border-radius:10px;padding:10px 16px;text-align:center;">' +
+                    '<div style="font-size:0.6rem;color:#8A7A5A;text-transform:uppercase;letter-spacing:1px;">Key</div>' +
+                    '<div style="font-size:1.2rem;font-weight:700;color:#FFE082;">' + (data.key || '?') + '</div>' +
+                '</div>' +
+                '<div style="background:rgba(212,160,23,0.1);border-radius:10px;padding:10px 16px;text-align:center;">' +
+                    '<div style="font-size:0.6rem;color:#8A7A5A;text-transform:uppercase;letter-spacing:1px;">Tracks</div>' +
+                    '<div style="font-size:1.2rem;font-weight:700;color:#FFE082;">' + (data.tracks ? data.tracks.length : 0) + '</div>' +
+                '</div>' +
+            '</div>' +
+            (tracksHtml ? '<div style="margin-bottom:16px;">' + tracksHtml + '</div>' : '') +
+            (data.analysis ? '<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:16px;margin-top:12px;">' +
+                '<div style="font-size:0.75rem;font-weight:700;color:#D4A017;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px;">AI Transition Analysis</div>' +
+                '<div style="font-size:0.8rem;color:#ccc;line-height:1.6;white-space:pre-wrap;">' + data.analysis + '</div>' +
+            '</div>' : '') +
+        '</div>';
+}
+
 function buildDefaultExperience(name, modeName) {
     var samples = MODE_SAMPLES[selectedMode] || MODE_SAMPLES.tools;
     var cards = samples.map(function(s, i) {

@@ -21,7 +21,8 @@ const MODE_NAMES = {
     tools: 'Tools',
     dashboard: 'Dashboard',
     presskit: 'Press Kit',
-    samples: 'Samples'
+    samples: 'Samples',
+    liveaudit: 'Live Audit'
 };
 
 const API_REQUIREMENTS = {
@@ -48,6 +49,7 @@ var TOOL_TABS = [
     { mode: 'stems',     icon: '🔀', label: 'Stems' },
     { mode: 'events',    icon: '📍', label: 'Events' },
     { mode: 'setbuilder',icon: '📋', label: 'Sets' },
+    { mode: 'liveaudit', icon: '🔍', label: 'Audit' },
     { mode: 'presskit',  icon: '📋', label: 'EPK' },
     { mode: 'samples',   icon: '🎙️', label: 'Samples' },
     { mode: 'tools',     icon: '🛠️', label: 'Tools' }
@@ -183,6 +185,7 @@ function buildExperienceInto(area) {
     else if (selectedMode === 'events') area.innerHTML = buildEventsExperience(name, modeName);
     else if (selectedMode === 'setbuilder') area.innerHTML = buildSetBuilderExperience(name, modeName);
     else if (selectedMode === 'archive') { area.innerHTML = buildArchiveExperience(name, modeName); loadArchiveList(); }
+    else if (selectedMode === 'liveaudit') area.innerHTML = buildLiveAuditExperience(name, modeName);
     else if (selectedMode === 'presskit') area.innerHTML = buildPressKitExperience(name, modeName);
     else if (selectedMode === 'samples') { area.innerHTML = buildSampleSaverExperience(name, modeName); renderSampleList(); }
     else if (selectedMode === 'tools') area.innerHTML = buildToolsExperience(name, modeName);
@@ -233,6 +236,7 @@ function renderHomeContent() {
         { mode: 'digestor', icon: '🔬', name: 'Digest', desc: 'Extract tracklists from DJ mixes', status: 'live' },
         { mode: 'shazam', icon: '🎧', name: 'Live ID', desc: 'Mic-based real-time track identification', status: 'live' },
         { mode: 'setbuilder', icon: '📋', name: 'Sets', desc: 'Build and plan DJ sets with AI', status: 'testing' },
+        { mode: 'liveaudit', icon: '🔍', name: 'Live Audit', desc: 'Full set analysis — tracklist, BPM, transitions', status: 'new' },
         { mode: 'tools', icon: '🛠️', name: 'Tools', desc: 'BPM tap, key finder, utilities', status: 'testing' }
     ];
 
