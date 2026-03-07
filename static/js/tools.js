@@ -2135,3 +2135,150 @@ function recheckSamples() {
     .then(function(d) { sbmToast('Re-check complete: ' + (d.matches || 0) + ' new matches', d.matches > 0 ? 'success' : 'info'); })
     .catch(function() { sbmToast('Re-check scheduled — results will appear next time you open Samples.', 'info'); });
 }
+
+/* ===== STATUS BOARD ===== */
+var _sbmBoard = {
+    sections: [
+        {
+            title: "IN PROGRESS",
+            color: "#1DB954",
+            items: [
+                {id:"ip1", text:"Vibe Check — DJ live session tool + audience page", done:true},
+                {id:"ip2", text:"Press Kit (EPK) builder", done:true},
+                {id:"ip3", text:"Casa Events integration", done:true},
+                {id:"ip4", text:"Serato library parser", done:true},
+                {id:"ip5", text:"Status Board tab (this page)", done:true},
+            ]
+        },
+        {
+            title: "PETER ACTION ITEMS",
+            color: "#F59E0B",
+            items: [
+                {id:"pa1", text:"Connect Spotify account (OAuth)", done:false,
+                 steps:["Go to Spotify Developer Dashboard","Verify app 'Simple Balance Music' exists","Check redirect URI matches: https://simple-balance-demo.onrender.com/callback","Login to SBM > Profile > Connect Spotify"],
+                 link:"https://developer.spotify.com/dashboard", linkLabel:"Spotify Developer Dashboard"},
+                {id:"pa2", text:"Connect Tidal account (OAuth PKCE)", done:false,
+                 steps:["Go to Tidal Developer Portal","Verify app credentials are active","Login to SBM > Profile > Connect Tidal","Uses PKCE flow — no server secret needed"],
+                 link:"https://developer.tidal.com/dashboard", linkLabel:"Tidal Developer Portal"},
+                {id:"pa3", text:"Check Azure OpenAI quota for SBM", done:false,
+                 steps:["Login to Azure Portal","Go to your OpenAI resource","Check J.A.W., Mastering, Discovery all use the same deployment","Verify rate limits are sufficient for demo usage"],
+                 link:"https://portal.azure.com/#view/Microsoft_Azure_ProjectOxford/CognitiveServicesHub/~/OpenAI", linkLabel:"Azure OpenAI Portal"},
+                {id:"pa4", text:"Verify Render deployment is healthy", done:false,
+                 steps:["Go to Render dashboard","Check simple-balance-demo service status","Verify latest deploy succeeded","Check logs tab for any startup errors"],
+                 link:"https://dashboard.render.com/web/srv-d6f80fpdrdic739pig80", linkLabel:"Render Dashboard"},
+                {id:"pa5", text:"Check Replicate API credits (for Stems + Generate)", done:false,
+                 steps:["Login to Replicate dashboard","Check usage and billing","Stems uses demucs model, Generate uses stable-audio","Free tier: limited runs/month"],
+                 link:"https://replicate.com/account/billing", linkLabel:"Replicate Billing"},
+                {id:"pa6", text:"Check AudD API credits (for Digestor + Sample ID)", done:false,
+                 steps:["Login to AudD dashboard","Check remaining API calls","Used by Digestor (audio recognition) and Sample re-check","Free tier: 300 requests/day"],
+                 link:"https://dashboard.audd.io/", linkLabel:"AudD Dashboard"},
+                {id:"pa7", text:"Decide: upgrade Render to Standard ($25/mo)?", done:false,
+                 steps:["SBM is on Starter ($7/mo) — 512MB RAM","Standard gives 2GB RAM — helps with audio processing","If stems/mastering is slow or OOM, upgrade","Go to Render > simple-balance-demo > Settings > Instance Type"],
+                 link:"https://dashboard.render.com/web/srv-d6f80fpdrdic739pig80/settings", linkLabel:"Render Settings"},
+                {id:"pa8", text:"Add health check endpoint to Render", done:false,
+                 steps:["Go to Render Dashboard > simple-balance-demo > Settings","Set Health Check Path to: /health","This enables zero-downtime deploys","Without it, Render can't verify the deploy succeeded"],
+                 link:"https://dashboard.render.com/web/srv-d6f80fpdrdic739pig80/settings", linkLabel:"Render Settings"},
+            ]
+        },
+        {
+            title: "API & CONFIG STATUS",
+            color: "#1DB954",
+            items: [
+                {id:"ac1", text:"Azure OpenAI — LIVE (J.A.W., Mastering, Discovery, Generate, Events)", done:true,
+                 link:"https://portal.azure.com", linkLabel:"Azure Portal"},
+                {id:"ac2", text:"Spotify — OAuth configured (needs user connect)", done:true,
+                 link:"https://developer.spotify.com/dashboard", linkLabel:"Spotify Dev"},
+                {id:"ac3", text:"Tidal — OAuth PKCE configured (needs user connect)", done:true,
+                 link:"https://developer.tidal.com/dashboard", linkLabel:"Tidal Dev"},
+                {id:"ac4", text:"Replicate — configured (Stems + Generate)", done:true,
+                 link:"https://replicate.com/account", linkLabel:"Replicate"},
+                {id:"ac5", text:"AudD — configured (Digestor + Sample ID)", done:true,
+                 link:"https://dashboard.audd.io/", linkLabel:"AudD"},
+                {id:"ac6", text:"Supabase — LIVE (auth + DB)", done:true,
+                 link:"https://supabase.com/dashboard", linkLabel:"Supabase"},
+                {id:"ac7", text:"Render — simple-balance-demo on Starter ($7/mo)", done:true,
+                 link:"https://dashboard.render.com", linkLabel:"Render"},
+                {id:"ac8", text:"GitHub — simplebalance89-ai/simple-balance-demo", done:true,
+                 link:"https://github.com/simplebalance89-ai/simple-balance-demo", linkLabel:"GitHub Repo"},
+            ]
+        },
+        {
+            title: "UPCOMING / BACKLOG",
+            color: "#C084FC",
+            items: [
+                {id:"bl1", text:"Serato live playlist integration (read Serato DB)", done:false,
+                 steps:["Parse Serato _Serato_ folder from USB/laptop","Extract played tracks with timestamps","Display as setlist in SBM","Optionally push to Vibe Check live session"]},
+                {id:"bl2", text:"QR code generation for Vibe Check links", done:false,
+                 steps:["Generate QR code from /vibe/{code} URL","Display in DJ panel for audience to scan","Can use qrcode.js (client-side, no API needed)"]},
+                {id:"bl3", text:"Persistent Vibe Check sessions (DB storage)", done:false,
+                 steps:["Currently in-memory — resets on deploy","Move to Supabase table: vibe_sessions","Add session history for DJs"]},
+                {id:"bl4", text:"Request voting/upvoting in Vibe Check", done:false},
+                {id:"bl5", text:"Beatport chart integration", done:false},
+                {id:"bl6", text:"Ticketmaster event integration", done:false},
+            ]
+        }
+    ]
+};
+
+function buildStatusBoardExperience(name, modeName) {
+    return '<div class="experience-container" style="max-width:600px;margin:0 auto;">' +
+        '<div class="experience-title">' +
+        '<h2 style="color:#1DB954;">Status Board</h2>' +
+        '<p>What we\'re building, what needs doing, and where to go.</p>' +
+        '</div>' +
+        '<div id="sbmBoardContent"></div>' +
+    '</div>';
+}
+
+function initSBMBoard() {
+    var container = document.getElementById('sbmBoardContent');
+    if (!container) return;
+    var checked = JSON.parse(localStorage.getItem('sbmBoardChecked') || '{}');
+
+    var html = '';
+    _sbmBoard.sections.forEach(function(section) {
+        html += '<div style="margin-bottom:20px;">';
+        html += '<div style="font-size:13px;font-weight:800;color:' + section.color + ';letter-spacing:1px;margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid ' + section.color + '33;">' + section.title + '</div>';
+
+        section.items.forEach(function(item) {
+            var isChecked = checked[item.id] || false;
+            var checkStyle = isChecked ? 'text-decoration:line-through;opacity:0.4;' : '';
+            html += '<div style="margin-bottom:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:10px 12px;">';
+
+            html += '<div style="display:flex;align-items:flex-start;gap:10px;">';
+            html += '<input type="checkbox" ' + (isChecked ? 'checked' : '') + ' onchange="toggleSBMBoardItem(\'' + item.id + '\',this)" style="width:18px;height:18px;accent-color:' + section.color + ';cursor:pointer;flex-shrink:0;margin-top:1px;">';
+            html += '<div style="flex:1;min-width:0;">';
+            html += '<div style="font-size:13px;font-weight:600;color:#fff;' + checkStyle + '">' + item.text + '</div>';
+
+            if (item.steps && item.steps.length) {
+                html += '<div style="margin-top:6px;padding-left:4px;">';
+                item.steps.forEach(function(step, idx) {
+                    html += '<div style="font-size:11px;color:rgba(255,255,255,0.45);padding:2px 0;display:flex;gap:6px;">';
+                    html += '<span style="color:' + section.color + ';font-weight:700;flex-shrink:0;">' + (idx+1) + '.</span>';
+                    html += '<span>' + step + '</span>';
+                    html += '</div>';
+                });
+                html += '</div>';
+            }
+
+            if (item.link) {
+                html += '<a href="' + item.link + '" target="_blank" rel="noopener" style="display:inline-block;margin-top:6px;font-size:11px;color:' + section.color + ';text-decoration:none;font-weight:700;padding:3px 10px;border:1px solid ' + section.color + '44;border-radius:5px;background:' + section.color + '11;">' + (item.linkLabel || 'Open') + ' &rarr;</a>';
+            }
+
+            html += '</div></div>';
+            html += '</div>';
+        });
+
+        html += '</div>';
+    });
+
+    html += '<div style="text-align:center;font-size:10px;color:rgba(255,255,255,0.2);margin-top:16px;">Last code update: March 7, 2026 | Check states saved in your browser</div>';
+    container.innerHTML = html;
+}
+
+function toggleSBMBoardItem(id, checkbox) {
+    var checked = JSON.parse(localStorage.getItem('sbmBoardChecked') || '{}');
+    checked[id] = checkbox.checked;
+    localStorage.setItem('sbmBoardChecked', JSON.stringify(checked));
+    initSBMBoard();
+}

@@ -23,7 +23,8 @@ const MODE_NAMES = {
     presskit: 'Press Kit',
     samples: 'Samples',
     liveaudit: 'Live Audit',
-    vibecheck: 'Vibe Check'
+    vibecheck: 'Vibe Check',
+    board: 'Status Board'
 };
 
 const API_REQUIREMENTS = {
@@ -54,7 +55,8 @@ var TOOL_TABS = [
     { mode: 'presskit',  icon: '📋', label: 'EPK' },
     { mode: 'samples',   icon: '🎙️', label: 'Samples' },
     { mode: 'tools',     icon: '🛠️', label: 'Tools' },
-    { mode: 'vibecheck', icon: '📡', label: 'Vibe' }
+    { mode: 'vibecheck', icon: '📡', label: 'Vibe' },
+    { mode: 'board',     icon: '📝', label: 'Board' }
 ];
 
 /* ===== API STATUS CHECK ===== */
@@ -193,6 +195,7 @@ function buildExperienceInto(area) {
     else if (selectedMode === 'tools') area.innerHTML = buildToolsExperience(name, modeName);
     else if (selectedMode === 'dashboard') { area.innerHTML = buildDashboardExperience(name, modeName); loadDashboardStats(); }
     else if (selectedMode === 'vibecheck') { area.innerHTML = buildVibeCheckExperience(name, modeName); }
+    else if (selectedMode === 'board') { area.innerHTML = buildStatusBoardExperience(name, modeName); initSBMBoard(); }
     else area.innerHTML = buildDefaultExperience(name, modeName);
 }
 
