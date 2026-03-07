@@ -434,7 +434,12 @@ function generateAudio() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: prompt, duration: duration })
     })
-    .then(function(r) { return r.json(); })
+    .then(function(r) {
+        if (!r.ok) {
+            return r.json().then(function(d) { throw new Error(d.detail || d.error || 'HTTP ' + r.status); });
+        }
+        return r.json();
+    })
     .then(function(data) {
         if (data.error) {
             container.innerHTML = '<div style="text-align:center;padding:16px;color:#EF4444;font-size:0.85rem;">' + data.error + '</div>';

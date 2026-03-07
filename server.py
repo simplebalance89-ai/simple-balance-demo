@@ -42,6 +42,22 @@ def _init_youtube_cookies():
 
 _init_youtube_cookies()
 
+# ── Error Log ─────────────────────────────────────────────────────────────────
+from collections import deque
+from datetime import datetime as _dt, timedelta
+_error_log = deque(maxlen=100)  # Keep last 100 errors
+
+def log_error(source: str, message: str, detail: str = ""):
+    """Add an error to the in-memory error log."""
+    entry = {
+        "ts": _dt.now().isoformat(),
+        "source": source,
+        "message": message,
+        "detail": str(detail)[:500],
+    }
+    _error_log.appendleft(entry)
+    logger.error("[%s] %s — %s", source, message, detail[:200] if detail else "")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -412,7 +428,7 @@ async def download_audio_file(job_id: str):
 # ── AudD Mix Digestor ─────────────────────────────────────────────────────────
 
 AUDD_API_URL = "https://enterprise.audd.io/"
-MUSICGEN_MODEL = "meta/musicgen:671ac645ce5e552cc63a54a2bbff63fcf798043055d2dac5fc9e36a837eedbd"
+MUSICGEN_MODEL = "meta/musicgen"
 
 
 def format_timestamp(seconds):
@@ -645,7 +661,7 @@ async def shazam_identify(file: UploadFile = File(...)):
             result = {"raw": result_text, "confidence": "low"}
         return {"status": "ok", "result": result, "source": "azure_openai"}
     except Exception as e:
-        logger.error(f"Shazam Azure error: {e}")
+        log_error("Shazam", f"Azure OpenAI failed: {type(e).__name__}", str(e))
         # Fallback to AudD if available
         audd_token = get_secret("AUDD_API_TOKEN")
         if audd_token:
@@ -1183,6 +1199,7 @@ async def stems(file: UploadFile = File(...)):
         return result
 
     except Exception as e:
+        log_error("Stems", f"Demucs failed: {type(e).__name__}", str(e))
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
@@ -1412,7 +1429,6 @@ async def generate_audio(payload: dict):
             input={
                 "prompt": prompt,
                 "duration": duration,
-                "model_version": "stereo-melody-large",
             },
         )
 
@@ -1424,6 +1440,7 @@ async def generate_audio(payload: dict):
         return {"audio_url": audio_url, "prompt": prompt, "duration": duration}
 
     except Exception as e:
+        log_error("MusicGen", f"Generation failed: {type(e).__name__}", str(e))
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
@@ -2847,6 +2864,12 @@ async def api_status():
         "beatport": bool(get_secret("BEATPORT_CLIENT_ID") and get_secret("BEATPORT_CLIENT_SECRET")),
         "predicthq": bool(get_secret("PREDICTHQ_API_TOKEN")),
     }
+
+
+@app.get("/api/errors")
+async def get_error_log(limit: int = 50):
+    """Return recent error log entries."""
+    return {"errors": list(_error_log)[:limit], "total": len(_error_log)}
 
 
 # ── Admin Dashboard ──────────────────────────────────────────────────────────

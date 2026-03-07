@@ -44,6 +44,27 @@ const API_REQUIREMENTS = {
 })();
 
 /* ===== TAB NAVIGATION ===== */
+function loadErrorLog() {
+    fetch('/api/errors?limit=20')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        var el = document.getElementById('errorLogEntries');
+        if (!el) return;
+        var errors = data.errors || [];
+        if (!errors.length) { el.innerHTML = '<div style="color:#4a4a4a;padding:8px;">No errors logged</div>'; return; }
+        el.innerHTML = errors.map(function(e) {
+            var ts = e.ts ? e.ts.split('T')[1].split('.')[0] : '';
+            return '<div style="padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.04);">' +
+                '<span style="color:#666;">' + ts + '</span> ' +
+                '<span style="color:#EF4444;font-weight:600;">[' + e.source + ']</span> ' +
+                '<span style="color:#ccc;">' + e.message + '</span>' +
+                (e.detail ? '<div style="color:#666;font-size:0.6rem;margin-top:2px;word-break:break-all;">' + e.detail.substring(0, 200) + '</div>' : '') +
+            '</div>';
+        }).join('');
+    })
+    .catch(function() {});
+}
+
 function navigateTab(tabName) {
     currentTab = tabName;
     const app = document.getElementById('app');
@@ -238,6 +259,15 @@ function renderHomeTab(app) {
                     <div class="ac-value" id="home-val-archive">--</div>
                 </div>
             </div>
+        </div>
+
+        <!-- Error Log (admin only) -->
+        <div class="home-section" id="errorLogSection" style="display:none;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                <div style="font-family:'Playfair Display',serif;font-size:0.9rem;color:#EF4444;">Error Log</div>
+                <button onclick="loadErrorLog()" style="background:none;border:1px solid rgba(239,68,68,0.3);color:#EF4444;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.65rem;">Refresh</button>
+            </div>
+            <div id="errorLogEntries" style="font-size:0.7rem;color:#999;max-height:200px;overflow-y:auto;"></div>
         </div>`;
 
     // Load dashboard stats for home
@@ -251,6 +281,14 @@ function renderHomeTab(app) {
         if (el2) el2.textContent = data.mixes_archived || 0;
     })
     .catch(() => {});
+
+    // Show error log for admins
+    var crew = JSON.parse(localStorage.getItem('sbm_crew') || '{}');
+    if (crew.is_admin) {
+        var errSec = document.getElementById('errorLogSection');
+        if (errSec) errSec.style.display = 'block';
+        loadErrorLog();
+    }
 
     // Re-apply Spotify/Tidal connected state
     if (spotifyConnected) updateSpotifyCardUI(true, spotifyUserInfo);
