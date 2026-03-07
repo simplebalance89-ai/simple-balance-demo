@@ -1,6 +1,129 @@
 /* ===== PROFILE & TASTE ANALYSIS ===== */
 let profileFavorites = [];
 
+/* --- Persistent Music Profile (per user, localStorage) --- */
+function _profileKey() {
+    var p = sbmProfile || {};
+    return 'sbm_music_profile_' + (p.display_name || 'guest');
+}
+function _tracksKey() {
+    var p = sbmProfile || {};
+    return 'sbm_profile_tracks_' + (p.display_name || 'guest');
+}
+
+function saveUserProfile(profile) {
+    try { localStorage.setItem(_profileKey(), JSON.stringify(profile)); } catch(e) {}
+}
+
+function loadUserProfile() {
+    try {
+        var raw = localStorage.getItem(_profileKey());
+        if (raw) {
+            userProfile = JSON.parse(raw);
+            return userProfile;
+        }
+    } catch(e) {}
+    return null;
+}
+
+function getSavedTracks() {
+    try {
+        var raw = localStorage.getItem(_tracksKey());
+        return raw ? JSON.parse(raw) : [];
+    } catch(e) { return []; }
+}
+
+function addTracksToSaved(tracks) {
+    var saved = getSavedTracks();
+    var existing = {};
+    saved.forEach(function(t) { existing[(t.name + '|' + t.artist).toLowerCase()] = true; });
+    var added = 0;
+    tracks.forEach(function(t) {
+        var key = ((t.name || t.title || '') + '|' + (t.artist || '')).toLowerCase();
+        if (!existing[key] && (t.name || t.title)) {
+            saved.push({ name: t.name || t.title, artist: t.artist || 'Unknown', source: t.source || 'unknown', added: new Date().toISOString() });
+            existing[key] = true;
+            added++;
+        }
+    });
+    if (added > 0) {
+        // Keep last 100 tracks
+        if (saved.length > 100) saved = saved.slice(-100);
+        try { localStorage.setItem(_tracksKey(), JSON.stringify(saved)); } catch(e) {}
+    }
+    return added;
+}
+
+function autoRebuildProfile() {
+    var saved = getSavedTracks();
+    if (saved.length < 3) return;
+    // Only rebuild if we have new tracks since last build
+    var lastBuild = 0;
+    try { lastBuild = parseInt(localStorage.getItem(_profileKey() + '_ts') || '0'); } catch(e) {}
+    var newestTrack = 0;
+    saved.forEach(function(t) { if (t.added) { var d = new Date(t.added).getTime(); if (d > newestTrack) newestTrack = d; } });
+    if (newestTrack <= lastBuild && userProfile) return; // No new tracks
+
+    var favorites = saved.slice(-20).map(function(t) { return t.name + ' by ' + t.artist; });
+    var headers = { 'Content-Type': 'application/json' };
+    if (sbmToken) headers['X-Crew-Token'] = sbmToken;
+
+    fetch('/api/profile/build', {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({ favorites: favorites })
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.profile) {
+            userProfile = data.profile;
+            userProfile._recommendations = data.recommendations || [];
+            saveUserProfile(userProfile);
+            try { localStorage.setItem(_profileKey() + '_ts', String(Date.now())); } catch(e) {}
+            renderSavedProfile();
+        }
+    }).catch(function() {});
+}
+
+function renderSavedProfile() {
+    var container = document.getElementById('buildProfileResults');
+    if (!container || !userProfile) return;
+
+    var profile = userProfile;
+    var genres = (profile.genres || []).map(function(g) { return '<span class="profile-genre-tag">' + g + '</span>'; }).join('');
+    var keys = (profile.key_clusters || []).join(', ');
+    var bpmMin = profile.bpm_range ? profile.bpm_range.min : '?';
+    var bpmMax = profile.bpm_range ? profile.bpm_range.max : '?';
+    var savedTracks = getSavedTracks();
+
+    var recsHtml = '';
+    var recs = profile._recommendations || [];
+    if (recs.length) {
+        recsHtml = '<div style="font-family:Playfair Display,serif;font-size:0.9rem;color:#FFE082;margin:16px 0 10px;">Recommended For You</div>';
+        recs.forEach(function(r) {
+            var art = (r.spotify && r.spotify.album_art) ? '<img src="' + r.spotify.album_art + '" style="width:36px;height:36px;border-radius:4px;">' : '<div style="width:36px;height:36px;border-radius:4px;background:#222;display:flex;align-items:center;justify-content:center;">🎵</div>';
+            recsHtml += '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);">' + art + '<div style="flex:1;min-width:0;"><div style="font-size:0.82rem;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (r.title || '') + '</div><div style="font-size:0.65rem;color:#8A7A5A;">' + (r.artist || '') + '</div></div></div>';
+        });
+    }
+
+    container.style.display = 'block';
+    container.innerHTML =
+        '<div class="profile-card">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+                '<h3>Your Music Profile</h3>' +
+                '<span style="font-size:0.6rem;color:#8A7A5A;">' + savedTracks.length + ' tracks analyzed</span>' +
+            '</div>' +
+            '<div class="profile-genres">' + genres + '</div>' +
+            '<div class="profile-stat"><span class="ps-label">Energy Level</span><span class="ps-value">' + (profile.energy_level || '—') + '</span></div>' +
+            '<div class="profile-stat"><span class="ps-label">BPM Range</span><span class="ps-value">' + bpmMin + ' – ' + bpmMax + '</span></div>' +
+            '<div class="profile-stat"><span class="ps-label">Key Clusters</span><span class="ps-value">' + (keys || '—') + '</span></div>' +
+            '<div class="profile-stat"><span class="ps-label">Mood</span><span class="ps-value">' + (profile.mood || '—') + '</span></div>' +
+            '<div class="profile-stat"><span class="ps-label">DJ Style</span><span class="ps-value">' + (profile.dj_style || '—') + '</span></div>' +
+        '</div>' + recsHtml;
+
+    // Hide the build card if profile exists
+    var buildCard = document.getElementById('buildProfileCard');
+    if (buildCard) buildCard.style.display = 'none';
+}
+
 /* --- Build Profile (manual input from Home tab) --- */
 function showBuildProfile() {
     const panel = document.getElementById('buildProfilePanel');
@@ -73,7 +196,12 @@ async function buildProfile() {
         }
 
         const profile = data.profile || {};
+        profile._recommendations = data.recommendations || [];
         userProfile = profile;
+        saveUserProfile(profile);
+        // Save the favorites as tracked songs
+        addTracksToSaved(favorites.map(function(f) { return { name: f, artist: '', source: 'manual' }; }));
+        try { localStorage.setItem(_profileKey() + '_ts', String(Date.now())); } catch(e) {}
         status.style.display = 'none';
         results.style.display = 'block';
 
@@ -125,6 +253,7 @@ function addTrackToProfile(name, artist, source) {
     const entry = { name: name, artist: artist, source: source };
     if (spotifyTracks.some(t => t.name === name && t.artist === artist)) return;
     spotifyTracks.push(entry);
+    addTracksToSaved([entry]);
     updateProfileTrackCount();
 }
 
@@ -214,7 +343,11 @@ async function analyzeMyMusic() {
         }
 
         var profile = data.profile || data;
+        profile._recommendations = data.recommendations || [];
         userProfile = profile;
+        saveUserProfile(profile);
+        addTracksToSaved(favorites.map(function(f) { return { name: f, artist: '', source: 'analyze' }; }));
+        try { localStorage.setItem(_profileKey() + '_ts', String(Date.now())); } catch(e) {}
         status.style.display = 'none';
         btn.style.display = 'none';
         var manualSection = document.getElementById('step2ManualSection');

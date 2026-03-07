@@ -142,6 +142,19 @@ function onGateSuccess() {
     if (nav) nav.style.display = '';
     authUpdateUI(sbmProfile);
     showToast('Welcome, ' + sbmProfile.display_name + '!');
+
+    // Navigate to home (renders profile)
+    if (typeof navigateTab === 'function') navigateTab('home');
+
+    // Load saved music profile after a tick (DOM needs to render)
+    setTimeout(function() {
+        if (typeof loadUserProfile === 'function') {
+            var saved = loadUserProfile();
+            if (saved && typeof renderSavedProfile === 'function') {
+                renderSavedProfile();
+            }
+        }
+    }, 200);
 }
 
 /* ----- UI Update ----- */

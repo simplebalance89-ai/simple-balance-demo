@@ -779,6 +779,17 @@ function renderDigestResults(container, data, metaContainer) {
         '<div style="text-align:center;margin-top:16px;">' +
             '<button class="btn-primary" onclick="resetDigestor()" style="font-size:0.8rem;padding:10px 24px;">Analyze Another</button>' +
         '</div>';
+
+    // Auto-feed identified tracks into music profile
+    if (typeof addTracksToSaved === 'function') {
+        var profileTracks = data.tracks.map(function(t) { return { name: t.title, artist: t.artist, source: 'digestor' }; });
+        var added = addTracksToSaved(profileTracks);
+        if (added > 0) {
+            showToast(added + ' track' + (added !== 1 ? 's' : '') + ' added to your music profile');
+            // Trigger background profile rebuild
+            if (typeof autoRebuildProfile === 'function') setTimeout(autoRebuildProfile, 1000);
+        }
+    }
 }
 
 function resetDigestor() {
