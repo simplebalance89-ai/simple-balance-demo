@@ -138,23 +138,14 @@ function onGateSuccess() {
     if (topBar) topBar.style.display = '';
     var app = document.getElementById('app');
     if (app) app.style.display = '';
-    var nav = document.getElementById('bottomNav');
-    if (nav) nav.style.display = '';
+    var toolTabsWrap = document.getElementById('toolTabsWrap');
+    if (toolTabsWrap) toolTabsWrap.style.display = '';
     authUpdateUI(sbmProfile);
     showToast('Welcome, ' + sbmProfile.display_name + '!');
 
-    // Navigate to home (renders profile)
-    if (typeof navigateTab === 'function') navigateTab('home');
-
-    // Load saved music profile after a tick (DOM needs to render)
-    setTimeout(function() {
-        if (typeof loadUserProfile === 'function') {
-            var saved = loadUserProfile();
-            if (saved && typeof renderSavedProfile === 'function') {
-                renderSavedProfile();
-            }
-        }
-    }, 200);
+    // Render tool tabs and home content
+    if (typeof renderToolTabs === 'function') renderToolTabs();
+    if (typeof renderHomeContent === 'function') renderHomeContent();
 }
 
 /* ----- UI Update ----- */

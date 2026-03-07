@@ -59,34 +59,24 @@
 
 <!-- Top Bar (hidden until login) -->
 <div class="top-bar" id="topBar" style="display:none;">
-    <span style="font-family:'Playfair Display',serif;font-weight:700;color:#FFE082;">s / b</span>
-    <span style="font-size:0.6rem;color:#8A7A5A;letter-spacing:2px;text-transform:uppercase;">AI Production Suite</span>
-    <button onclick="clearAllCache()" style="background:none;border:none;color:#666;font-size:0.6rem;cursor:pointer;padding:4px 8px;">Clear Cache</button>
-    <div id="authHeaderBtn" style="cursor:pointer;font-size:0.7rem;color:#FFE082;padding:4px 8px;"></div>
+    <div class="topbar-left">
+        <span class="topbar-brand">s / b</span>
+    </div>
+    <div class="topbar-right">
+        <button onclick="clearAllCache()" class="topbar-action">Clear Cache</button>
+        <div id="authHeaderBtn" class="topbar-user"></div>
+    </div>
+</div>
+
+<!-- Tool Tabs (Edge Crew style — hidden until login) -->
+<div class="tool-tabs-wrap" id="toolTabsWrap" style="display:none;">
+    <div class="tool-tabs" id="toolTabs"></div>
 </div>
 
 <!-- Main Content (hidden until login) -->
-<main id="app" style="display:none;"></main>
-
-<!-- Bottom Navigation -->
-<nav class="bottom-nav" id="bottomNav" style="display:none;">
-    <div class="nav-tab active" data-tab="home" onclick="navigateTab('home')">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-        <span>Home</span>
-    </div>
-    <div class="nav-tab" data-tab="discover" onclick="navigateTab('discover')">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
-        <span>Discover</span>
-    </div>
-    <div class="nav-tab" data-tab="studio" onclick="navigateTab('studio')">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="12" y2="14"/></svg>
-        <span>Studio</span>
-    </div>
-    <div class="nav-tab" data-tab="library" onclick="navigateTab('library')">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-        <span>Library</span>
-    </div>
-</nav>
+<main id="app" style="display:none;">
+    <div id="contentArea" class="content-area"></div>
+</main>
 
 <!-- Scripts (order matters: utils first, then auth, then services, then tools, then profile, then library, then app last) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
