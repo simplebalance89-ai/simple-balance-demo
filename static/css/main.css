@@ -196,7 +196,7 @@ html { scroll-behavior: smooth; }
 #app {
     flex: 1;
     width: 100%;
-    max-width: 1100px;
+    max-width: 600px;
     margin: 0 auto;
     padding: 20px 20px;
     animation: pageIn 0.4s ease;
@@ -251,7 +251,6 @@ html { scroll-behavior: smooth; }
     grid-template-columns: repeat(3, 1fr);
     gap: 12px;
     width: 100%;
-    max-width: 640px;
     margin: 0 auto 24px;
 }
 .feature-card {
@@ -345,8 +344,6 @@ html { scroll-behavior: smooth; }
     grid-template-columns: repeat(2, 1fr);
     gap: 12px;
     width: 100%;
-    max-width: 500px;
-    margin: 0 auto;
 }
 .connect-card {
     background: var(--sbm-bg-card);
