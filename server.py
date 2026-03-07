@@ -430,7 +430,7 @@ async def download_audio_file(job_id: str):
 AUDD_API_URL = "https://api.audd.io/"
 # Primary: Stable Audio 2.5 (active). Fallback: MusicGen (may be deprecated)
 MUSIC_MODELS = [
-    "stability-ai/stable-audio-2.5",
+    "stability-ai/stable-audio-open-1.0",
     "meta/musicgen:671ac645ce5e552cc63a54a2bbff63baaf072c63a4ed27abe4dc0c8e1ae1da57",
     "meta/musicgen",
 ]
@@ -1467,9 +1467,9 @@ async def generate_audio(payload: dict):
                     logger.info(f"Audio generated via HF MusicGen ({attempt_dur}s clip)")
                     return {"audio_url": audio_url, "prompt": prompt, "duration": attempt_dur, "model": "musicgen-small"}
                 elif hf_resp.status_code == 503:
-                    # Model loading — wait and retry
-                    logger.info(f"HF MusicGen loading (503), retrying shorter clip...")
-                    await asyncio.sleep(3)
+                    # Model loading — wait and retry (cold start takes ~20s)
+                    logger.info(f"HF MusicGen loading (503), waiting for model warmup...")
+                    await asyncio.sleep(15)
                     continue
                 else:
                     logger.warning(f"HF MusicGen returned {hf_resp.status_code}: {hf_resp.text[:200]}")
@@ -1492,6 +1492,8 @@ async def generate_audio(payload: dict):
                 audio_url = None
                 if isinstance(output, str):
                     audio_url = output
+                elif isinstance(output, list) and len(output) > 0:
+                    audio_url = str(output[0])
                 elif hasattr(output, 'url'):
                     audio_url = output.url
                 elif output:

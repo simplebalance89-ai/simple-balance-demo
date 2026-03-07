@@ -1397,6 +1397,42 @@ html { scroll-behavior: smooth; }
     }
     .chat-msg.user { margin-left: 20px; }
     .chat-msg.assistant { margin-right: 20px; }
+
+    /* Profile card mobile */
+    .profile-card {
+        padding: 16px;
+        max-width: 100%;
+        border-radius: 14px;
+    }
+    .profile-card h3 {
+        font-size: 1rem;
+    }
+    .profile-stat {
+        font-size: 0.78rem;
+        padding: 8px 0;
+    }
+    .profile-genre-tag {
+        font-size: 0.65rem;
+        padding: 4px 10px;
+    }
+
+    /* Home welcome mobile */
+    .welcome-greeting {
+        font-size: 1.1rem;
+    }
+
+    /* Service chips / connect cards mobile */
+    .connect-card {
+        padding: 12px;
+    }
+
+    /* Experience panels (EPK, Generate, etc.) */
+    .experience-title h2 {
+        font-size: 1.1rem;
+    }
+    .experience-title p {
+        font-size: 0.78rem;
+    }
 }
 
 /* ===== SELECTION STYLE ===== */
