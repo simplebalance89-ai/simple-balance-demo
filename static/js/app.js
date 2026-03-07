@@ -17,6 +17,7 @@ const MODE_NAMES = {
     setbuilder: 'Set Builder',
     archive: 'Mix Archive',
     digestor: 'Mix Digestor',
+    shazam: 'Track ID',
     tools: 'Producer Tools',
     dashboard: 'Dashboard'
 };
@@ -30,7 +31,8 @@ const API_REQUIREMENTS = {
     setbuilder: 'azure_openai',
     tools: 'azure_openai',
     stems: 'replicate',
-    digestor: 'audd'
+    digestor: 'audd',
+    shazam: 'azure_openai'
 };
 
 /* ===== API STATUS CHECK ===== */
@@ -84,6 +86,7 @@ function buildExperienceInto(area) {
     else if (selectedMode === 'discovery') area.innerHTML = buildDiscoveryExperience(name, modeName);
     else if (selectedMode === 'generation') area.innerHTML = buildGenerationExperience(name, modeName);
     else if (selectedMode === 'digestor') area.innerHTML = buildDigestorExperience(name, modeName);
+    else if (selectedMode === 'shazam') area.innerHTML = buildShazamExperience(name, modeName);
     else if (selectedMode === 'stems') area.innerHTML = buildStemsExperience(name, modeName);
     else if (selectedMode === 'events') area.innerHTML = buildEventsExperience(name, modeName);
     else if (selectedMode === 'setbuilder') area.innerHTML = buildSetBuilderExperience(name, modeName);
@@ -284,6 +287,7 @@ function renderStudioTab(app) {
             ${featureCard('mastering', '🎚️', 'AI Mastering', 'Upload and analyze your tracks')}
             ${featureCard('stems', '🔀', 'Stem Separation', 'Split tracks into vocals, drums, bass')}
             ${featureCard('digestor', '🔬', 'Mix Digestor', 'Extract tracklists from DJ mixes')}
+            ${featureCard('shazam', '🎵', 'Track ID', 'Identify any song with AI')}
             ${featureCard('generation', '🎹', 'AI Generation', 'Generate beats and patterns')}
             ${featureCard('tools', '🛠️', 'Producer Tools', 'Music theory and production Q&A')}
         </div>

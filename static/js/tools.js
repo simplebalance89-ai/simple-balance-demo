@@ -485,6 +485,100 @@ function resetStems() {
     document.getElementById('stemFile').value = '';
 }
 
+/* --- Track ID (Shazam) --- */
+function buildShazamExperience(name, modeName) {
+    return `
+        <div class="experience-title">
+            <h2>${modeName}</h2>
+            <p>Upload a clip or record from your mic. AI identifies the track.</p>
+        </div>
+        <div style="width:100%;max-width:500px;">
+            <div style="background:rgba(255,255,255,0.03);border:2px dashed rgba(212,160,23,0.3);border-radius:16px;padding:32px;text-align:center;margin-bottom:16px;cursor:pointer;" onclick="document.getElementById('shazamFile').click()" id="shazamDrop">
+                <div style="font-size:2.5rem;margin-bottom:8px;">🎵</div>
+                <div style="font-family:'Playfair Display',serif;font-size:1.1rem;color:#FFE082;margin-bottom:4px;">Drop an audio clip</div>
+                <div style="font-size:0.75rem;color:#8A7A5A;">MP3, WAV, M4A — short clips work best</div>
+                <input type="file" id="shazamFile" accept="audio/*" style="display:none" onchange="shazamUpload(this)">
+            </div>
+            <div id="shazamStatus" style="display:none;text-align:center;padding:20px;">
+                <div style="font-size:0.85rem;color:#D4A017;" id="shazamMsg">Listening...</div>
+                <div style="width:100%;height:4px;background:rgba(255,255,255,0.06);border-radius:2px;margin-top:12px;overflow:hidden;">
+                    <div id="shazamBar" style="width:0%;height:100%;background:linear-gradient(90deg,#D4A017,#FFE082);border-radius:2px;transition:width 0.5s ease;"></div>
+                </div>
+            </div>
+            <div id="shazamResult" style="display:none;"></div>
+        </div>`;
+}
+
+function shazamUpload(input) {
+    var file = input.files[0];
+    if (!file) return;
+    var drop = document.getElementById('shazamDrop');
+    var status = document.getElementById('shazamStatus');
+    var result = document.getElementById('shazamResult');
+    var msg = document.getElementById('shazamMsg');
+    var bar = document.getElementById('shazamBar');
+
+    drop.style.display = 'none';
+    status.style.display = 'block';
+    result.style.display = 'none';
+    msg.textContent = 'Uploading "' + file.name + '"...';
+    msg.style.color = '#D4A017';
+    bar.style.width = '30%';
+
+    var formData = new FormData();
+    formData.append('file', file);
+
+    setTimeout(function() { msg.textContent = 'AI is listening...'; bar.style.width = '60%'; }, 1500);
+    setTimeout(function() { msg.textContent = 'Identifying track...'; bar.style.width = '80%'; }, 4000);
+
+    fetch('/api/shazam', { method: 'POST', body: formData })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        bar.style.width = '100%';
+        if (data.error) {
+            msg.textContent = 'Error: ' + data.error;
+            msg.style.color = '#EF4444';
+            return;
+        }
+        status.style.display = 'none';
+        var r = data.result || {};
+        var conf = r.confidence || 'low';
+        var confColor = conf === 'high' ? '#10B981' : conf === 'medium' ? '#F59E0B' : '#EF4444';
+
+        result.style.display = 'block';
+        result.innerHTML =
+            '<div style="background:rgba(212,160,23,0.06);border:1px solid rgba(212,160,23,0.2);border-radius:16px;padding:24px;text-align:center;">' +
+                '<div style="font-size:2rem;margin-bottom:8px;">🎯</div>' +
+                '<div style="font-family:\'Playfair Display\',serif;font-size:1.3rem;color:#FFE082;margin-bottom:4px;">' + (r.title || 'Unknown') + '</div>' +
+                '<div style="font-size:0.95rem;color:rgba(255,255,255,0.7);margin-bottom:12px;">' + (r.artist || 'Unknown Artist') + '</div>' +
+                (r.album ? '<div style="font-size:0.8rem;color:rgba(255,255,255,0.4);margin-bottom:4px;">Album: ' + r.album + '</div>' : '') +
+                (r.year ? '<div style="font-size:0.8rem;color:rgba(255,255,255,0.4);margin-bottom:4px;">Year: ' + r.year + '</div>' : '') +
+                (r.genre ? '<div style="font-size:0.8rem;color:rgba(255,255,255,0.4);margin-bottom:8px;">Genre: ' + r.genre + '</div>' : '') +
+                '<div style="display:inline-block;font-size:0.7rem;font-weight:700;padding:4px 12px;border-radius:12px;background:rgba(0,0,0,0.3);color:' + confColor + ';border:1px solid ' + confColor + ';">' + conf.toUpperCase() + ' CONFIDENCE</div>' +
+                '<div style="font-size:0.65rem;color:rgba(255,255,255,0.25);margin-top:8px;">via ' + (data.source || 'AI') + '</div>' +
+            '</div>' +
+            '<div style="text-align:center;margin-top:16px;">' +
+                '<button onclick="resetShazam()" style="padding:10px 24px;border-radius:12px;border:none;background:linear-gradient(135deg,#D4A017,#B8860B);color:#0D0D1A;font-weight:800;cursor:pointer;font-family:inherit;font-size:0.85rem;">Identify Another</button>' +
+            '</div>';
+    })
+    .catch(function(err) {
+        bar.style.width = '100%';
+        msg.textContent = 'Failed: ' + err.message;
+        msg.style.color = '#EF4444';
+    });
+}
+
+function resetShazam() {
+    var drop = document.getElementById('shazamDrop');
+    var status = document.getElementById('shazamStatus');
+    var result = document.getElementById('shazamResult');
+    if (drop) drop.style.display = 'block';
+    if (status) status.style.display = 'none';
+    if (result) result.style.display = 'none';
+    var fileInput = document.getElementById('shazamFile');
+    if (fileInput) fileInput.value = '';
+}
+
 /* --- Mix Digestor --- */
 function buildDigestorExperience(name, modeName) {
     return `
