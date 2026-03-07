@@ -1511,3 +1511,39 @@ html { scroll-behavior: smooth; }
     color: var(--sbm-accent-light);
     margin-bottom: 12px;
 }
+
+/* ===== SWIM LANES ===== */
+.swim-lane {
+    margin: 0 16px 20px;
+    background: var(--sbm-bg-card);
+    border: 1px solid var(--sbm-border);
+    border-radius: var(--sbm-radius-lg);
+    padding: 16px;
+}
+.swim-lane-header {
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--sbm-border-accent);
+}
+.swim-lane-title {
+    font-family: var(--sbm-font-display);
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--sbm-accent-light);
+}
+.swim-lane-sub {
+    font-size: 0.72rem;
+    color: var(--sbm-text-muted);
+    margin-top: 2px;
+}
+.swim-lane .connect-row {
+    margin: 0 0 12px;
+    padding: 0;
+}
+.swim-lane .feature-grid {
+    margin: 12px 0 0;
+    padding: 0;
+}
+.swim-lane .home-section-title {
+    display: none;
+}
