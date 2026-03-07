@@ -22,7 +22,8 @@ const MODE_NAMES = {
     dashboard: 'Dashboard',
     presskit: 'Press Kit',
     samples: 'Samples',
-    liveaudit: 'Live Audit'
+    liveaudit: 'Live Audit',
+    vibecheck: 'Vibe Check'
 };
 
 const API_REQUIREMENTS = {
@@ -52,7 +53,8 @@ var TOOL_TABS = [
     { mode: 'liveaudit', icon: '🔍', label: 'Audit' },
     { mode: 'presskit',  icon: '📋', label: 'EPK' },
     { mode: 'samples',   icon: '🎙️', label: 'Samples' },
-    { mode: 'tools',     icon: '🛠️', label: 'Tools' }
+    { mode: 'tools',     icon: '🛠️', label: 'Tools' },
+    { mode: 'vibecheck', icon: '📡', label: 'Vibe' }
 ];
 
 /* ===== API STATUS CHECK ===== */
@@ -190,6 +192,7 @@ function buildExperienceInto(area) {
     else if (selectedMode === 'samples') { area.innerHTML = buildSampleSaverExperience(name, modeName); renderSampleList(); }
     else if (selectedMode === 'tools') area.innerHTML = buildToolsExperience(name, modeName);
     else if (selectedMode === 'dashboard') { area.innerHTML = buildDashboardExperience(name, modeName); loadDashboardStats(); }
+    else if (selectedMode === 'vibecheck') { area.innerHTML = buildVibeCheckExperience(name, modeName); }
     else area.innerHTML = buildDefaultExperience(name, modeName);
 }
 
@@ -239,7 +242,8 @@ function renderHomeContent() {
         { mode: 'shazam', icon: '🎧', name: 'Live ID', desc: 'Mic-based real-time track identification', status: 'live' },
         { mode: 'setbuilder', icon: '📋', name: 'Sets', desc: 'Build and plan DJ sets with AI', status: 'testing' },
         { mode: 'liveaudit', icon: '🔍', name: 'Live Audit', desc: 'Full set analysis — tracklist, BPM, transitions', status: 'new' },
-        { mode: 'tools', icon: '🛠️', name: 'Tools', desc: 'BPM tap, key finder, utilities', status: 'testing' }
+        { mode: 'tools', icon: '🛠️', name: 'Tools', desc: 'BPM tap, key finder, utilities', status: 'testing' },
+        { mode: 'vibecheck', icon: '📡', name: 'Vibe Check', desc: 'Live session — audience sees tracks & requests songs', status: 'new' }
     ];
 
     area.innerHTML =

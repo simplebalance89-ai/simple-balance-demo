@@ -1858,6 +1858,153 @@ function exportPressKit() {
     sbmToast('Press kit export coming soon — shareable link & PDF download.', 'info');
 }
 
+/* ===== VIBE CHECK (DJ Side) ===== */
+var vibeSessionCode = null;
+
+function buildVibeCheckExperience(name, modeName) {
+    return `
+        <div class="experience-title">
+            <h2>${modeName}</h2>
+            <p>Start a live session. Audience joins from their phone to see what you're playing and request songs.</p>
+        </div>
+        <div style="width:100%;max-width:500px;">
+            <div id="vibeControls">
+                <button onclick="startVibeSession()" class="btn-primary" style="padding:16px 32px;border-radius:16px;font-size:1rem;width:100%;">
+                    Start Live Session
+                </button>
+            </div>
+            <div id="vibeSession" style="display:none;">
+                <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:16px;padding:20px;text-align:center;margin-bottom:16px;">
+                    <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:2px;color:rgba(255,255,255,0.4);margin-bottom:4px;">Share This Link</div>
+                    <div id="vibeJoinURL" style="font-size:1.1rem;color:#22c55e;font-weight:800;word-break:break-all;cursor:pointer;" onclick="copyVibeLink()"></div>
+                    <div style="font-size:0.7rem;color:rgba(255,255,255,0.3);margin-top:8px;">Tap to copy. Audience opens this on their phone.</div>
+                </div>
+
+                <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:20px;margin-bottom:16px;">
+                    <div style="font-size:0.9rem;font-weight:700;color:#FFE082;margin-bottom:12px;">Now Playing</div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <input type="text" id="vibeTrackTitle" placeholder="Track title" style="flex:2;min-width:120px;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#fff;font-size:0.85rem;box-sizing:border-box;">
+                        <input type="text" id="vibeTrackArtist" placeholder="Artist" style="flex:1;min-width:80px;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#fff;font-size:0.85rem;box-sizing:border-box;">
+                    </div>
+                    <div style="display:flex;gap:8px;margin-top:8px;">
+                        <input type="text" id="vibeTrackBPM" placeholder="BPM" style="flex:1;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#fff;font-size:0.85rem;box-sizing:border-box;">
+                        <input type="text" id="vibeTrackKey" placeholder="Key" style="flex:1;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#fff;font-size:0.85rem;box-sizing:border-box;">
+                        <button onclick="updateVibeNowPlaying()" style="padding:10px 20px;background:#D4A017;color:#0D0D1A;border:none;border-radius:8px;font-weight:700;font-size:0.85rem;cursor:pointer;white-space:nowrap;">Update</button>
+                    </div>
+                </div>
+
+                <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:20px;margin-bottom:16px;">
+                    <div style="font-size:0.9rem;font-weight:700;color:#FFE082;margin-bottom:12px;">Song Requests</div>
+                    <div id="vibeRequests" style="color:rgba(255,255,255,0.4);font-size:0.82rem;">No requests yet.</div>
+                </div>
+
+                <button onclick="endVibeSession()" style="width:100%;padding:14px;border-radius:12px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.08);color:#EF4444;font-weight:700;font-size:0.85rem;cursor:pointer;">End Session</button>
+            </div>
+        </div>`;
+}
+
+function startVibeSession() {
+    fetch('/api/vibe/create', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ dj_name: (sbmProfile || {}).display_name || 'DJ' })
+    }).then(function(r) { return r.json(); }).then(function(data) {
+        vibeSessionCode = data.code;
+        document.getElementById('vibeControls').style.display = 'none';
+        document.getElementById('vibeSession').style.display = 'block';
+        var url = window.location.origin + '/vibe/' + data.code;
+        document.getElementById('vibeJoinURL').textContent = url;
+        // Start polling requests
+        setInterval(pollVibeRequests, 5000);
+        sbmToast('Session started! Share the link with your audience.', 'success');
+    }).catch(function() {
+        sbmToast('Failed to start session', 'error');
+    });
+}
+
+function copyVibeLink() {
+    var url = document.getElementById('vibeJoinURL').textContent;
+    navigator.clipboard.writeText(url).then(function() {
+        sbmToast('Link copied!', 'success');
+    }).catch(function() {
+        sbmToast('Copy failed — select and copy manually', 'info');
+    });
+}
+
+function updateVibeNowPlaying() {
+    if (!vibeSessionCode) return;
+    var title = document.getElementById('vibeTrackTitle').value.trim();
+    if (!title) { sbmToast('Enter a track title', 'error'); return; }
+    fetch('/api/vibe/' + vibeSessionCode + '/now-playing', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            title: title,
+            artist: document.getElementById('vibeTrackArtist').value.trim(),
+            bpm: document.getElementById('vibeTrackBPM').value.trim(),
+            key: document.getElementById('vibeTrackKey').value.trim()
+        })
+    }).then(function(r) { return r.json(); }).then(function() {
+        sbmToast('Now playing updated', 'success');
+        document.getElementById('vibeTrackTitle').value = '';
+        document.getElementById('vibeTrackArtist').value = '';
+        document.getElementById('vibeTrackBPM').value = '';
+        document.getElementById('vibeTrackKey').value = '';
+    }).catch(function() {
+        sbmToast('Update failed', 'error');
+    });
+}
+
+function pollVibeRequests() {
+    if (!vibeSessionCode) return;
+    fetch('/api/vibe/' + vibeSessionCode + '/requests')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var container = document.getElementById('vibeRequests');
+            if (!container) return;
+            var reqs = data.requests || [];
+            if (reqs.length === 0) { container.innerHTML = 'No requests yet.'; return; }
+            container.innerHTML = reqs.map(function(r) {
+                var statusColor = r.status === 'approved' ? '#22c55e' : r.status === 'denied' ? '#EF4444' : '#D4A017';
+                var statusLabel = r.status === 'pending' ? 'Pending' : r.status.charAt(0).toUpperCase() + r.status.slice(1);
+                var actions = r.status === 'pending'
+                    ? '<div style="display:flex;gap:4px;margin-top:6px;">' +
+                        '<button onclick="respondVibeRequest(' + r.id + ',\'approved\')" style="padding:6px 12px;border-radius:6px;border:none;background:#22c55e;color:#0D0D1A;font-weight:700;font-size:0.7rem;cursor:pointer;">Play</button>' +
+                        '<button onclick="respondVibeRequest(' + r.id + ',\'denied\')" style="padding:6px 12px;border-radius:6px;border:none;background:rgba(239,68,68,0.2);color:#EF4444;font-weight:600;font-size:0.7rem;cursor:pointer;">Skip</button>' +
+                      '</div>'
+                    : '';
+                return '<div style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04);">' +
+                    '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+                        '<div><span style="color:#fff;font-size:0.85rem;font-weight:600;">' + r.song + '</span>' +
+                            '<span style="color:rgba(255,255,255,0.3);font-size:0.7rem;margin-left:8px;">from ' + r.from + '</span></div>' +
+                        '<span style="font-size:0.65rem;color:' + statusColor + ';font-weight:700;text-transform:uppercase;">' + statusLabel + '</span>' +
+                    '</div>' + actions + '</div>';
+            }).join('');
+        });
+}
+
+function respondVibeRequest(reqId, status) {
+    if (!vibeSessionCode) return;
+    fetch('/api/vibe/' + vibeSessionCode + '/requests/' + reqId, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ status: status })
+    }).then(function() {
+        pollVibeRequests();
+    });
+}
+
+function endVibeSession() {
+    if (!vibeSessionCode) return;
+    fetch('/api/vibe/' + vibeSessionCode + '/end', { method: 'POST' })
+        .then(function() {
+            vibeSessionCode = null;
+            document.getElementById('vibeControls').style.display = 'block';
+            document.getElementById('vibeSession').style.display = 'none';
+            sbmToast('Session ended', 'info');
+        });
+}
+
 /* ===== SAMPLE SAVER ===== */
 function buildSampleSaverExperience(name, modeName) {
     return `

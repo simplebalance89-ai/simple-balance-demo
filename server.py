@@ -3102,6 +3102,123 @@ async def scheduler_log():
     return {"runs": [], "message": "No scheduler runs yet"}
 
 
+# ── Vibe Check — Live DJ Session (Audience Phone View) ───────────────────────
+
+_vibe_sessions = {}  # session_code -> { dj, now_playing, history, requests, created }
+
+def _get_vibe_session(code):
+    return _vibe_sessions.get(code)
+
+@app.post("/api/vibe/create")
+async def vibe_create(request: Request):
+    """DJ creates a live session. Returns a short join code."""
+    user = await get_current_user(request)
+    dj_name = "DJ"
+    if user:
+        dj_name = user.get("name", "DJ")
+    else:
+        data = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
+        dj_name = data.get("dj_name", "DJ")
+
+    code = secrets.token_hex(3).upper()  # 6-char hex code
+    _vibe_sessions[code] = {
+        "dj": dj_name,
+        "now_playing": None,
+        "history": [],
+        "requests": [],
+        "created": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "active": True,
+    }
+    return {"code": code, "join_url": f"/vibe/{code}"}
+
+@app.post("/api/vibe/{code}/now-playing")
+async def vibe_now_playing(code: str, request: Request):
+    """DJ sets the currently playing track."""
+    session = _get_vibe_session(code)
+    if not session:
+        return JSONResponse({"error": "Session not found"}, status_code=404)
+    data = await request.json()
+    track = {
+        "title": data.get("title", "Unknown"),
+        "artist": data.get("artist", ""),
+        "bpm": data.get("bpm", ""),
+        "key": data.get("key", ""),
+        "started_at": time.strftime("%H:%M", time.localtime()),
+    }
+    if session["now_playing"]:
+        session["history"].append(session["now_playing"])
+    session["now_playing"] = track
+    return {"status": "updated", "now_playing": track}
+
+@app.get("/api/vibe/{code}")
+async def vibe_status(code: str):
+    """Audience polls this to see what's playing + request status."""
+    session = _get_vibe_session(code)
+    if not session:
+        return JSONResponse({"error": "Session not found"}, status_code=404)
+    return {
+        "dj": session["dj"],
+        "now_playing": session["now_playing"],
+        "history": session["history"][-20:],
+        "active": session["active"],
+    }
+
+@app.post("/api/vibe/{code}/request")
+async def vibe_request(code: str, request: Request):
+    """Audience submits a song request."""
+    session = _get_vibe_session(code)
+    if not session:
+        return JSONResponse({"error": "Session not found"}, status_code=404)
+    data = await request.json()
+    song = data.get("song", "").strip()
+    if not song:
+        return JSONResponse({"error": "No song provided"}, status_code=400)
+    req_entry = {
+        "id": len(session["requests"]) + 1,
+        "song": song,
+        "from": data.get("name", "Someone"),
+        "status": "pending",
+        "time": time.strftime("%H:%M", time.localtime()),
+    }
+    session["requests"].append(req_entry)
+    return {"status": "submitted", "request": req_entry}
+
+@app.get("/api/vibe/{code}/requests")
+async def vibe_requests(code: str):
+    """DJ views all requests."""
+    session = _get_vibe_session(code)
+    if not session:
+        return JSONResponse({"error": "Session not found"}, status_code=404)
+    return {"requests": session["requests"]}
+
+@app.post("/api/vibe/{code}/requests/{req_id}")
+async def vibe_request_update(code: str, req_id: int, request: Request):
+    """DJ approves or denies a request."""
+    session = _get_vibe_session(code)
+    if not session:
+        return JSONResponse({"error": "Session not found"}, status_code=404)
+    data = await request.json()
+    for r in session["requests"]:
+        if r["id"] == req_id:
+            r["status"] = data.get("status", "pending")
+            return {"status": "updated", "request": r}
+    return JSONResponse({"error": "Request not found"}, status_code=404)
+
+@app.post("/api/vibe/{code}/end")
+async def vibe_end(code: str):
+    """DJ ends the session."""
+    session = _get_vibe_session(code)
+    if not session:
+        return JSONResponse({"error": "Session not found"}, status_code=404)
+    session["active"] = False
+    return {"status": "ended"}
+
+@app.get("/vibe/{code}")
+async def vibe_page(code: str):
+    """Serve the audience view page."""
+    return FileResponse("static/vibe.html")
+
+
 @app.get("/")
 async def root():
     return FileResponse("static/index.html")

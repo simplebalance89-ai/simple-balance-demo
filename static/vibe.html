@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Vibe Check</title>
+<link rel="manifest" href="/manifest.json">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#0D0D1A;color:#fff;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;min-height:100vh;min-height:100dvh;overflow-x:hidden;}
+.container{max-width:420px;margin:0 auto;padding:16px;padding-bottom:100px;}
+.header{text-align:center;padding:24px 0 16px;}
+.header h1{font-size:1.6rem;font-weight:800;background:linear-gradient(135deg,#D4A017,#FFE082);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-0.02em;}
+.header .dj-name{font-size:0.85rem;color:rgba(255,255,255,0.5);margin-top:4px;}
+.header .live-dot{display:inline-block;width:8px;height:8px;background:#22c55e;border-radius:50%;margin-right:6px;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
+
+.now-playing{background:linear-gradient(135deg,rgba(212,160,23,0.12),rgba(212,160,23,0.04));border:1px solid rgba(212,160,23,0.2);border-radius:20px;padding:24px;margin:16px 0;text-align:center;}
+.np-label{font-size:0.65rem;text-transform:uppercase;letter-spacing:2px;color:rgba(255,255,255,0.4);margin-bottom:8px;}
+.np-title{font-size:1.3rem;font-weight:800;color:#FFE082;line-height:1.3;}
+.np-artist{font-size:0.9rem;color:rgba(255,255,255,0.6);margin-top:4px;}
+.np-meta{display:flex;justify-content:center;gap:16px;margin-top:12px;}
+.np-meta span{font-size:0.75rem;color:rgba(255,255,255,0.35);background:rgba(255,255,255,0.04);padding:4px 10px;border-radius:8px;}
+
+.section{margin:20px 0;}
+.section-title{font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;color:rgba(255,255,255,0.3);margin-bottom:10px;padding-left:4px;}
+
+.history-item{display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.04);}
+.history-item .hi-time{font-size:0.7rem;color:rgba(255,255,255,0.25);min-width:40px;}
+.history-item .hi-title{font-size:0.82rem;color:#fff;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.history-item .hi-artist{font-size:0.7rem;color:rgba(255,255,255,0.4);}
+
+.request-form{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:16px;position:fixed;bottom:0;left:0;right:0;max-width:420px;margin:0 auto;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);z-index:10;}
+.request-form .rf-row{display:flex;gap:8px;}
+.request-form input{flex:1;padding:12px 16px;border-radius:12px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.06);color:#fff;font-size:0.85rem;font-family:inherit;outline:none;}
+.request-form input:focus{border-color:rgba(212,160,23,0.4);}
+.request-form input::placeholder{color:rgba(255,255,255,0.25);}
+.request-form button{padding:12px 20px;border-radius:12px;border:none;background:linear-gradient(135deg,#D4A017,#B8860B);color:#0D0D1A;font-weight:800;font-size:0.85rem;cursor:pointer;white-space:nowrap;min-width:44px;min-height:44px;}
+.request-form button:active{transform:scale(0.96);}
+
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-100px);background:#D4A017;color:#0D0D1A;padding:10px 24px;border-radius:12px;font-size:0.82rem;font-weight:700;transition:transform 0.3s ease;z-index:100;}
+.toast.show{transform:translateX(-50%) translateY(0);}
+
+.ended{text-align:center;padding:60px 20px;color:rgba(255,255,255,0.4);}
+.ended h2{font-size:1.2rem;color:#FFE082;margin-bottom:8px;}
+
+.loading{text-align:center;padding:60px 20px;color:rgba(255,255,255,0.4);font-size:0.85rem;}
+
+.name-input{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:16px;margin-bottom:8px;}
+.name-input input{width:100%;padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#fff;font-size:0.82rem;font-family:inherit;outline:none;}
+</style>
+</head>
+<body>
+<div class="container" id="vibeApp">
+    <div class="loading">Connecting to session...</div>
+</div>
+<div id="toast" class="toast"></div>
+
+<script>
+var CODE = window.location.pathname.split('/').pop();
+var myName = localStorage.getItem('vibe_name') || '';
+var pollTimer = null;
+
+function showToast(msg) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(function() { t.classList.remove('show'); }, 2500);
+}
+
+function render(data) {
+    var app = document.getElementById('vibeApp');
+    if (!data || data.error) {
+        app.innerHTML = '<div class="ended"><h2>Session Not Found</h2><p>This vibe check session doesn\'t exist or has expired.</p></div>';
+        return;
+    }
+    if (!data.active) {
+        app.innerHTML = '<div class="ended"><h2>Set\'s Over</h2><p>' + data.dj + ' has ended the session. Thanks for vibing!</p></div>';
+        if (pollTimer) clearInterval(pollTimer);
+        return;
+    }
+
+    var np = data.now_playing;
+    var npHtml = '';
+    if (np) {
+        var metaHtml = '';
+        if (np.bpm || np.key) {
+            metaHtml = '<div class="np-meta">';
+            if (np.bpm) metaHtml += '<span>' + np.bpm + ' BPM</span>';
+            if (np.key) metaHtml += '<span>Key: ' + np.key + '</span>';
+            metaHtml += '</div>';
+        }
+        npHtml =
+            '<div class="now-playing">' +
+                '<div class="np-label"><span class="live-dot"></span>Now Playing</div>' +
+                '<div class="np-title">' + np.title + '</div>' +
+                (np.artist ? '<div class="np-artist">' + np.artist + '</div>' : '') +
+                metaHtml +
+            '</div>';
+    } else {
+        npHtml = '<div class="now-playing"><div class="np-label">Waiting</div><div class="np-title" style="color:rgba(255,255,255,0.3);">No track loaded yet</div></div>';
+    }
+
+    var historyHtml = '';
+    if (data.history && data.history.length > 0) {
+        historyHtml = '<div class="section"><div class="section-title">Previously Played</div>';
+        var reversed = data.history.slice().reverse();
+        reversed.forEach(function(h) {
+            historyHtml += '<div class="history-item">' +
+                '<span class="hi-time">' + (h.started_at || '') + '</span>' +
+                '<span class="hi-title">' + h.title + (h.artist ? ' <span class="hi-artist">- ' + h.artist + '</span>' : '') + '</span>' +
+            '</div>';
+        });
+        historyHtml += '</div>';
+    }
+
+    var nameHtml = '';
+    if (!myName) {
+        nameHtml = '<div class="name-input"><input type="text" id="nameInput" placeholder="Your name (optional)" onchange="myName=this.value;localStorage.setItem(\'vibe_name\',this.value);"></div>';
+    }
+
+    app.innerHTML =
+        '<div class="header">' +
+            '<h1>VIBE CHECK</h1>' +
+            '<div class="dj-name"><span class="live-dot"></span>' + data.dj + ' is live</div>' +
+        '</div>' +
+        npHtml +
+        historyHtml +
+        '<div style="height:90px;"></div>';
+
+    // Fixed request form at bottom
+    if (!document.getElementById('requestForm')) {
+        var form = document.createElement('div');
+        form.className = 'request-form';
+        form.id = 'requestForm';
+        form.innerHTML =
+            nameHtml +
+            '<div class="rf-row">' +
+                '<input type="text" id="requestInput" placeholder="Request a song..." autocomplete="off">' +
+                '<button onclick="submitRequest()">Send</button>' +
+            '</div>';
+        document.body.appendChild(form);
+    }
+}
+
+function submitRequest() {
+    var input = document.getElementById('requestInput');
+    var song = (input.value || '').trim();
+    if (!song) return;
+
+    var nameEl = document.getElementById('nameInput');
+    if (nameEl && nameEl.value) {
+        myName = nameEl.value;
+        localStorage.setItem('vibe_name', myName);
+    }
+
+    fetch('/api/vibe/' + CODE + '/request', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ song: song, name: myName || 'Someone' })
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.error) { showToast(d.error); return; }
+        showToast('Request sent!');
+        input.value = '';
+    }).catch(function() {
+        showToast('Failed to send request');
+    });
+}
+
+function poll() {
+    fetch('/api/vibe/' + CODE)
+        .then(function(r) { return r.json(); })
+        .then(render)
+        .catch(function() {});
+}
+
+// Enter key submits
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && document.activeElement && document.activeElement.id === 'requestInput') {
+        submitRequest();
+    }
+});
+
+// Start polling
+poll();
+pollTimer = setInterval(poll, 5000);
+</script>
+</body>
+</html>
