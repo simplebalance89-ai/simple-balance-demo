@@ -2082,95 +2082,6 @@ async def tidal_search(q: str, limit: int = 10, countryCode: str = "US", session
     }, status_code=401)
 
 
-# ── Tidal OAuth (User Login) ─────────────────────────────────────────────────
-
-_tidal_user_sessions = {}  # {session_id: {access_token, refresh_token, expires_at}}
-
-TIDAL_REDIRECT_URI = os.environ.get(
-    "TIDAL_REDIRECT_URI", "https://simple-balance-demo.onrender.com/api/tidal/callback"
-)
-
-
-@app.get("/api/tidal/login")
-async def tidal_login(redirect_to: str = "/"):
-    """Redirect to Tidal authorization page for user OAuth."""
-    client_id = get_secret("TIDAL_CLIENT_ID")
-    if not client_id:
-        return JSONResponse({"error": "Tidal not configured"}, status_code=503)
-    state = base64.urlsafe_b64encode(redirect_to.encode()).decode().rstrip("=")
-    params = urlencode({
-        "client_id": client_id,
-        "response_type": "code",
-        "redirect_uri": TIDAL_REDIRECT_URI,
-        "scope": "user.read collection.read collection.write search.read search.write playlists.read playlists.write entitlements.read playback recommendations.read",
-        "state": state,
-    })
-    return RedirectResponse(f"https://login.tidal.com/authorize?{params}")
-
-
-@app.get("/api/tidal/callback")
-async def tidal_callback(code: str = "", error: str = "", state: str = ""):
-    """Handle Tidal OAuth callback — exchange code for tokens."""
-    # Decode the return path from state
-    padding = 4 - len(state) % 4
-    if padding != 4:
-        state += "=" * padding
-    try:
-        return_path = base64.urlsafe_b64decode(state).decode()
-    except Exception:
-        return_path = "/"
-
-    if error or not code:
-        return RedirectResponse(return_path)
-
-    client_id = get_secret("TIDAL_CLIENT_ID")
-    client_secret = get_secret("TIDAL_CLIENT_SECRET")
-    if not client_id or not client_secret:
-        return RedirectResponse(return_path)
-
-    auth = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
-    try:
-        async with httpx.AsyncClient(timeout=15) as http:
-            resp = await http.post(
-                "https://auth.tidal.com/v1/oauth2/token",
-                headers={
-                    "Authorization": f"Basic {auth}",
-                    "Content-Type": "application/x-www-form-urlencoded",
-                },
-                data={
-                    "grant_type": "authorization_code",
-                    "code": code,
-                    "redirect_uri": TIDAL_REDIRECT_URI,
-                },
-            )
-            if resp.status_code != 200:
-                print(f"[Tidal OAuth] Token exchange failed: {resp.status_code} {resp.text[:500]}")
-                return RedirectResponse(return_path)
-            tokens = resp.json()
-    except Exception as e:
-        print(f"[Tidal OAuth] Error: {e}")
-        return RedirectResponse(return_path)
-
-    session_id = secrets.token_urlsafe(32)
-    expires_in = tokens.get("expires_in", 86400)
-    _tidal_user_sessions[session_id] = {
-        "access_token": tokens["access_token"],
-        "refresh_token": tokens.get("refresh_token"),
-        "expires_at": (datetime.now() + timedelta(seconds=expires_in)).isoformat(),
-    }
-
-    separator = "&" if "?" in return_path else "?"
-    return RedirectResponse(f"{return_path}{separator}tidal_session={session_id}")
-
-
-@app.get("/api/tidal/me")
-async def tidal_me(session: str = ""):
-    """Check if Tidal user session is valid."""
-    if session not in _tidal_user_sessions:
-        return JSONResponse({"error": "Not logged in", "logged_in": False}, status_code=401)
-    return {"logged_in": True}
-
-
 # ── AI-Powered Recommendations (Spotify + Tidal) ────────────────────────────
 
 @app.get("/api/recommendations")
@@ -2400,14 +2311,23 @@ async def _build_profile_from_spotify(favorites: list) -> dict | None:
 # ── Crew Auth (PIN-based profile selector) ────────────────────────────────────
 
 SBM_CREW = {
-    "J.A.W.": {"color": "#10B981", "is_admin": False},
-    "Chinny Beatz": {"color": "#E879F9", "is_admin": False},
-    "Pete Dekan": {"color": "#818cf8", "is_admin": True},
-    "CGReyes": {"color": "#F59E0B", "is_admin": False},
-    "TECHNOLASKO": {"color": "#EF4444", "is_admin": False},
-    "Jose Alejo": {"color": "#06B6D4", "is_admin": False},
-    "Willis Haltom": {"color": "#A78BFA", "is_admin": False},
-    "Guest": {"color": "#6B7280", "is_admin": False},
+    "J.A.W.": {"color": "#10B981", "is_admin": False, "links": {}},
+    "Chinny Beatz": {"color": "#E879F9", "is_admin": False, "links": {
+        "soundcloud": "https://soundcloud.com/chinny-beatz",
+    }},
+    "Pete Dekan": {"color": "#818cf8", "is_admin": True, "links": {
+        "soundcloud": "https://soundcloud.com/peter-wilson-30",
+    }},
+    "CGReyes": {"color": "#F59E0B", "is_admin": False, "links": {}},
+    "TECHNOLASKO": {"color": "#EF4444", "is_admin": False, "links": {}},
+    "Jose Alejo": {"color": "#06B6D4", "is_admin": False, "links": {
+        "soundcloud": "https://soundcloud.com/jose-alejo",
+    }},
+    "Willis Haltom": {"color": "#A78BFA", "is_admin": False, "links": {
+        "spotify": "https://open.spotify.com/artist/5H5oZW1d7pw77CNm4rOO1x",
+        "soundcloud": "https://soundcloud.com/willis-haltom",
+    }},
+    "Guest": {"color": "#6B7280", "is_admin": False, "links": {}},
 }
 _sbm_tokens = {}  # token -> profile dict
 
@@ -2418,10 +2338,12 @@ async def crew_login(payload: dict):
     pin = payload.get("pin", "")
     if name not in SBM_CREW:
         return JSONResponse({"error": "Unknown crew member"}, status_code=401)
-    if str(pin) != "1234":
+    crew_pin = get_secret("CREW_PIN", "1234")
+    if str(pin) != crew_pin:
         return JSONResponse({"error": "Wrong PIN"}, status_code=401)
     token = secrets.token_urlsafe(32)
-    profile = {"display_name": name, "color": SBM_CREW[name]["color"], "is_admin": SBM_CREW[name]["is_admin"]}
+    member = SBM_CREW[name]
+    profile = {"display_name": name, "color": member["color"], "is_admin": member["is_admin"], "links": member.get("links", {})}
     _sbm_tokens[token] = profile
     return {"token": token, "profile": profile}
 
@@ -2433,8 +2355,9 @@ async def crew_register(payload: dict):
     color = payload.get("color", "#818cf8")
     if not name or len(name) < 2:
         return JSONResponse({"error": "Name must be at least 2 characters"}, status_code=400)
-    if str(pin) != "1234":
-        return JSONResponse({"error": "PIN must be 1234"}, status_code=400)
+    crew_pin = get_secret("CREW_PIN", "1234")
+    if str(pin) != crew_pin:
+        return JSONResponse({"error": "Wrong PIN"}, status_code=400)
     if name not in SBM_CREW:
         SBM_CREW[name] = {"color": color, "is_admin": False}
     token = secrets.token_urlsafe(32)
@@ -2455,6 +2378,41 @@ async def crew_verify(request: Request):
 @app.get("/api/crew/members")
 async def crew_members():
     return {"members": list(SBM_CREW.keys())}
+
+
+@app.get("/api/crew/profile/{name}")
+async def crew_profile(name: str):
+    """Get a crew member's full profile with streaming links."""
+    member = SBM_CREW.get(name)
+    if not member:
+        return JSONResponse({"error": "Unknown crew member"}, status_code=404)
+    profile = {"display_name": name, "color": member["color"], "links": member.get("links", {})}
+
+    # If they have a Spotify artist ID, fetch their catalog
+    spotify_url = member.get("links", {}).get("spotify", "")
+    if "spotify.com/artist/" in spotify_url:
+        artist_id = spotify_url.split("/artist/")[-1].split("?")[0]
+        try:
+            client_id = get_secret("SPOTIFY_CLIENT_ID")
+            client_secret = get_secret("SPOTIFY_CLIENT_SECRET")
+            if client_id and client_secret:
+                import base64 as b64mod
+                auth_str = b64mod.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+                async with httpx.AsyncClient(timeout=10) as hc:
+                    token_resp = await hc.post("https://accounts.spotify.com/api/token",
+                        data={"grant_type": "client_credentials"},
+                        headers={"Authorization": f"Basic {auth_str}"})
+                    sp_token = token_resp.json().get("access_token")
+                    if sp_token:
+                        sp_headers = {"Authorization": f"Bearer {sp_token}"}
+                        albums_resp = await hc.get(f"https://api.spotify.com/v1/artists/{artist_id}/albums?limit=10&market=US", headers=sp_headers)
+                        top_resp = await hc.get(f"https://api.spotify.com/v1/artists/{artist_id}/top-tracks?market=US", headers=sp_headers)
+                        profile["spotify_albums"] = [{"name": a["name"], "year": a.get("release_date", "")[:4], "image": a["images"][0]["url"] if a.get("images") else None, "url": a["external_urls"]["spotify"]} for a in albums_resp.json().get("items", [])]
+                        profile["spotify_tracks"] = [{"name": t["name"], "album": t["album"]["name"], "preview_url": t.get("preview_url"), "url": t["external_urls"]["spotify"]} for t in top_resp.json().get("tracks", [])[:10]]
+        except Exception as e:
+            logger.warning(f"Spotify catalog fetch failed for {name}: {e}")
+
+    return profile
 
 
 @app.post("/api/auth/ensure-profile")
