@@ -415,9 +415,10 @@ function buildGenerationExperience(name, modeName) {
             <div style="display:flex;gap:8px;">
                 <input type="text" id="genPrompt" placeholder="melodic techno with driving bassline, 130 BPM" style="flex:1;padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#fff;font-family:inherit;font-size:0.85rem;">
                 <select id="genDuration" style="padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#fff;font-family:inherit;font-size:0.8rem;">
+                    <option value="2">2s</option>
+                    <option value="4" selected>4s</option>
                     <option value="8">8s</option>
                     <option value="15">15s</option>
-                    <option value="30">30s</option>
                 </select>
                 <button onclick="generateAudio()" style="padding:10px 20px;border-radius:10px;border:none;background:linear-gradient(135deg,#D4A017,#B8860B);color:#0D0D1A;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap;">Generate</button>
             </div>

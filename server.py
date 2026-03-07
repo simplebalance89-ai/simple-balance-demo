@@ -1439,30 +1439,44 @@ async def generate_audio(payload: dict):
     duration = max(1, min(int(duration), 30))
 
     # --- Try 1: Hugging Face Inference API (free, no key required for public models) ---
-    try:
-        hf_token = get_secret("HF_API_TOKEN", "")
-        hf_headers = {"Content-Type": "application/json"}
-        if hf_token:
-            hf_headers["Authorization"] = f"Bearer {hf_token}"
+    # Cap at 4s clips for reliability — HF free tier times out on longer durations
+    hf_duration = min(duration, 4)
+    hf_token = get_secret("HF_API_TOKEN", "")
+    hf_headers = {"Content-Type": "application/json"}
+    if hf_token:
+        hf_headers["Authorization"] = f"Bearer {hf_token}"
 
-        async with httpx.AsyncClient(timeout=120) as hc:
-            hf_resp = await hc.post(
-                HF_MUSICGEN_URL,
-                headers=hf_headers,
-                json={"inputs": prompt},
-            )
-            if hf_resp.status_code == 200 and hf_resp.headers.get("content-type", "").startswith("audio/"):
-                # Save audio bytes and serve as data URI
-                import base64 as b64gen
-                audio_b64 = b64gen.b64encode(hf_resp.content).decode()
-                ct = hf_resp.headers.get("content-type", "audio/flac")
-                audio_url = f"data:{ct};base64,{audio_b64}"
-                logger.info("Audio generated via Hugging Face MusicGen")
-                return {"audio_url": audio_url, "prompt": prompt, "duration": duration, "model": "musicgen-small"}
-            else:
-                logger.warning(f"HF MusicGen returned {hf_resp.status_code}: {hf_resp.text[:200]}")
-    except Exception as e:
-        logger.warning(f"HF MusicGen failed: {e}")
+    # Try up to 2 times (first with requested duration capped at 4s, then retry at 2s)
+    for attempt_dur in [hf_duration, 2]:
+        try:
+            hf_payload = {
+                "inputs": prompt,
+                "parameters": {"max_new_tokens": int(attempt_dur * 50)},
+            }
+            async with httpx.AsyncClient(timeout=90) as hc:
+                hf_resp = await hc.post(
+                    HF_MUSICGEN_URL,
+                    headers=hf_headers,
+                    json=hf_payload,
+                )
+                if hf_resp.status_code == 200 and hf_resp.headers.get("content-type", "").startswith("audio/"):
+                    import base64 as b64gen
+                    audio_b64 = b64gen.b64encode(hf_resp.content).decode()
+                    ct = hf_resp.headers.get("content-type", "audio/flac")
+                    audio_url = f"data:{ct};base64,{audio_b64}"
+                    logger.info(f"Audio generated via HF MusicGen ({attempt_dur}s clip)")
+                    return {"audio_url": audio_url, "prompt": prompt, "duration": attempt_dur, "model": "musicgen-small"}
+                elif hf_resp.status_code == 503:
+                    # Model loading — wait and retry
+                    logger.info(f"HF MusicGen loading (503), retrying shorter clip...")
+                    await asyncio.sleep(3)
+                    continue
+                else:
+                    logger.warning(f"HF MusicGen returned {hf_resp.status_code}: {hf_resp.text[:200]}")
+                    break
+        except Exception as e:
+            logger.warning(f"HF MusicGen failed ({attempt_dur}s): {e}")
+            continue
 
     # --- Try 2: Replicate (if token available) ---
     replicate_token = get_secret("REPLICATE_API_TOKEN")
