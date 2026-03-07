@@ -122,22 +122,23 @@ var TESTING_MODES = []; // All modes now have real backends
 function featureCard(mode, icon, title, desc) {
     const req = API_REQUIREMENTS[mode];
     const available = !req || apiStatus[req];
-    var badge;
+    var badgeClass, badgeText;
     if (TESTING_MODES.indexOf(mode) !== -1) {
-        badge = '<span style="font-size:0.55rem;background:rgba(245,158,11,0.15);color:#F59E0B;padding:2px 6px;border-radius:4px;">TESTING</span>';
+        badgeClass = 'fc-badge-testing';
+        badgeText = 'TESTING';
     } else if (available) {
-        badge = '<span style="font-size:0.55rem;background:rgba(76,175,80,0.15);color:#4CAF50;padding:2px 6px;border-radius:4px;">READY</span>';
+        badgeClass = 'fc-badge-ready';
+        badgeText = 'READY';
     } else {
-        badge = '<span style="font-size:0.55rem;background:rgba(255,255,255,0.06);color:#666;padding:2px 6px;border-radius:4px;">NEEDS KEY</span>';
+        badgeClass = 'fc-badge-needs';
+        badgeText = 'NEEDS KEY';
     }
     return `
-        <div class="feature-card" onclick="launchMode('${mode}')">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-                <span style="font-size:1.3rem;">${icon}</span>
-                ${badge}
-            </div>
-            <div style="font-family:'Playfair Display',serif;font-size:0.95rem;color:#FFE082;margin-bottom:4px;">${title}</div>
-            <div style="font-size:0.7rem;color:#8A7A5A;">${desc}</div>
+        <div class="feature-card${!available ? ' disabled' : ''}" onclick="launchMode('${mode}')">
+            <div class="fc-icon">${icon}</div>
+            <div class="fc-name">${title}</div>
+            <div class="fc-desc">${desc}</div>
+            <div class="fc-badge-label ${badgeClass}">${badgeText}</div>
         </div>`;
 }
 
@@ -151,7 +152,7 @@ function renderHomeTab(app) {
 
         <!-- Quick Actions -->
         <div class="home-section">
-            <div style="font-family:'Playfair Display',serif;font-size:1rem;color:#FFE082;margin-bottom:12px;">Quick Actions</div>
+            <div class="home-section-title">Quick Actions</div>
             <div class="quick-action-grid">
                 <button class="btn-secondary" onclick="navigateTab('discover');setTimeout(()=>launchMode('jaw'),100)">Chat with J.A.W.</button>
                 <button class="btn-secondary" onclick="navigateTab('studio');setTimeout(()=>launchMode('mastering'),100)">Analyze a Track</button>
@@ -162,29 +163,29 @@ function renderHomeTab(app) {
 
         <!-- Connect Services -->
         <div class="home-section">
-            <div style="font-family:'Playfair Display',serif;font-size:1rem;color:#FFE082;margin-bottom:4px;">Connect Services</div>
-            <div style="font-size:0.7rem;color:#8A7A5A;margin-bottom:12px;">Optional — enhances search and recommendations</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-                <div id="spotifyCard" class="connect-card" onclick="connectSpotify()" style="background:rgba(29,185,84,0.06);border:1px solid rgba(29,185,84,0.2);border-radius:12px;padding:14px;cursor:pointer;transition:all 0.3s;">
-                    <div style="font-size:1.2rem;margin-bottom:4px;">🟢</div>
-                    <div style="font-size:0.85rem;font-weight:700;color:#1DB954;">Spotify</div>
-                    <div class="cc-status" style="font-size:0.65rem;color:#22c55e;margin-top:4px;">Ready to connect</div>
+            <div class="home-section-title">Connect Services</div>
+            <div class="home-section-subtitle">Optional — enhances search and recommendations</div>
+            <div class="connect-grid">
+                <div id="spotifyCard" class="connect-card connect-spotify" onclick="connectSpotify()">
+                    <div class="cc-icon">🟢</div>
+                    <div class="cc-name" style="color:#1DB954;">Spotify</div>
+                    <div class="cc-status">Ready to connect</div>
                 </div>
-                <div id="tidalCard" class="connect-card" onclick="connectTidal()" style="background:rgba(0,191,255,0.06);border:1px solid rgba(0,191,255,0.2);border-radius:12px;padding:14px;cursor:pointer;transition:all 0.3s;">
-                    <div style="font-size:1.2rem;margin-bottom:4px;">🌊</div>
-                    <div style="font-size:0.85rem;font-weight:700;color:#00BFFF;">Tidal</div>
-                    <div class="cc-status" style="font-size:0.65rem;color:#22c55e;margin-top:4px;">Ready to connect</div>
+                <div id="tidalCard" class="connect-card connect-tidal" onclick="connectTidal()">
+                    <div class="cc-icon">🌊</div>
+                    <div class="cc-name" style="color:#00BFFF;">Tidal</div>
+                    <div class="cc-status">Ready to connect</div>
                 </div>
             </div>
 
             <!-- Spotify Library (hidden until connected) -->
-            <div id="spotifyLibrary" style="display:none;margin-top:12px;background:rgba(29,185,84,0.04);border:1px solid rgba(29,185,84,0.15);border-radius:12px;padding:14px;">
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-                    <span style="color:#1DB954;font-size:0.8rem;font-weight:700;" id="spotifyUserLabel">Spotify</span>
+            <div id="spotifyLibrary" class="service-library service-library-spotify" style="display:none;">
+                <div class="service-library-header">
+                    <span class="service-library-label" id="spotifyUserLabel" style="color:#1DB954;">Spotify</span>
                 </div>
-                <div style="display:flex;gap:8px;margin-bottom:10px;">
-                    <input type="text" id="spotifySearchInput" placeholder="Search Spotify..." style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid rgba(29,185,84,0.3);background:#1a1a2e;color:#fff;font-family:'Nunito',sans-serif;font-size:0.8rem;" onkeydown="if(event.key==='Enter')spotifySearch()">
-                    <select id="spotifyGenreFilter" style="padding:6px;border-radius:8px;border:1px solid #333;background:#1a1a2e;color:#888;font-size:0.7rem;">
+                <div class="service-search-row">
+                    <input type="text" id="spotifySearchInput" class="service-search-input" placeholder="Search Spotify..." style="border-color:rgba(29,185,84,0.3);" onkeydown="if(event.key==='Enter')spotifySearch()">
+                    <select id="spotifyGenreFilter" class="service-genre-filter">
                         <option value="">All Genres</option>
                         <option value="house">House</option>
                         <option value="techno">Techno</option>
@@ -194,17 +195,17 @@ function renderHomeTab(app) {
                         <option value="drum and bass">DnB</option>
                         <option value="ambient">Ambient</option>
                     </select>
-                    <button onclick="spotifySearch()" style="padding:8px 14px;border-radius:8px;border:none;background:#1DB954;color:#000;font-weight:700;cursor:pointer;font-size:0.75rem;">Go</button>
+                    <button class="service-search-btn" style="background:#1DB954;" onclick="spotifySearch()">Go</button>
                 </div>
                 <div id="spotifyPlaylists"></div>
-                <div id="spotifyResults" style="max-height:300px;overflow-y:auto;"></div>
+                <div id="spotifyResults" class="service-results"></div>
             </div>
 
             <!-- Tidal Library (hidden until connected) -->
-            <div id="tidalLibrary" style="display:none;margin-top:12px;background:rgba(0,191,255,0.04);border:1px solid rgba(0,191,255,0.15);border-radius:12px;padding:14px;">
-                <div style="display:flex;gap:8px;margin-bottom:10px;">
-                    <input type="text" id="tidalSearchInput" placeholder="Search Tidal..." style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid rgba(0,191,255,0.3);background:#1a1a2e;color:#fff;font-family:'Nunito',sans-serif;font-size:0.8rem;" onkeydown="if(event.key==='Enter')tidalSearch()">
-                    <select id="tidalGenreFilter" style="padding:6px;border-radius:8px;border:1px solid #333;background:#1a1a2e;color:#888;font-size:0.7rem;">
+            <div id="tidalLibrary" class="service-library service-library-tidal" style="display:none;">
+                <div class="service-search-row">
+                    <input type="text" id="tidalSearchInput" class="service-search-input" placeholder="Search Tidal..." style="border-color:rgba(0,191,255,0.3);" onkeydown="if(event.key==='Enter')tidalSearch()">
+                    <select id="tidalGenreFilter" class="service-genre-filter">
                         <option value="">All Genres</option>
                         <option value="house">House</option>
                         <option value="techno">Techno</option>
@@ -212,9 +213,9 @@ function renderHomeTab(app) {
                         <option value="deep house">Deep House</option>
                         <option value="ambient">Ambient</option>
                     </select>
-                    <button onclick="tidalSearch()" style="padding:8px 14px;border-radius:8px;border:none;background:#00BFFF;color:#000;font-weight:700;cursor:pointer;font-size:0.75rem;">Go</button>
+                    <button class="service-search-btn" style="background:#00BFFF;" onclick="tidalSearch()">Go</button>
                 </div>
-                <div id="tidalResults" style="max-height:300px;overflow-y:auto;"></div>
+                <div id="tidalResults" class="service-results"></div>
             </div>
 
             <div id="profileTrackBadge" style="display:none;margin-top:8px;font-size:0.7rem;color:#D4A017;text-align:center;"></div>
@@ -222,24 +223,24 @@ function renderHomeTab(app) {
 
         <!-- Build Profile -->
         <div class="home-section">
-            <div id="buildProfileCard" style="background:rgba(212,160,23,0.06);border:1px solid rgba(212,160,23,0.2);border-radius:12px;padding:14px;cursor:pointer;" onclick="showBuildProfile()">
-                <div style="display:flex;align-items:center;gap:10px;">
-                    <span style="font-size:1.3rem;">🎵</span>
+            <div id="buildProfileCard" class="build-profile-cta" onclick="showBuildProfile()">
+                <div class="build-profile-cta-inner">
+                    <span class="build-profile-cta-icon">🎵</span>
                     <div>
-                        <div style="font-size:0.85rem;font-weight:700;color:#FFE082;">Build Your Music Profile</div>
-                        <div style="font-size:0.65rem;color:#8A7A5A;">Add favorites to get personalized recommendations</div>
+                        <div class="build-profile-cta-title">Build Your Music Profile</div>
+                        <div class="build-profile-cta-desc">Add favorites to get personalized recommendations</div>
                     </div>
                 </div>
             </div>
-            <div id="buildProfilePanel" style="display:none;margin-top:12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:16px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                    <span style="font-size:0.75rem;color:#8A7A5A;">Your favorite songs or artists</span>
-                    <span id="favCount" style="font-size:0.65rem;color:#D4A017;">0 / 10</span>
+            <div id="buildProfilePanel" class="build-profile-panel" style="display:none;">
+                <div class="build-profile-panel-header">
+                    <span class="build-profile-panel-label">Your favorite songs or artists</span>
+                    <span id="favCount" class="build-profile-panel-count">0 / 10</span>
                 </div>
                 <div id="favoritesInputs"></div>
-                <div style="display:flex;gap:8px;margin-top:8px;">
-                    <button onclick="addFavoriteInput()" style="flex:1;padding:8px;border-radius:8px;border:1px dashed rgba(212,160,23,0.3);background:transparent;color:#D4A017;cursor:pointer;font-size:0.75rem;">+ Add More</button>
-                    <button id="buildProfileBtn" onclick="buildProfile()" disabled class="btn-primary" style="flex:1;padding:8px;font-size:0.8rem;">Build Profile</button>
+                <div class="build-profile-actions">
+                    <button class="btn-add-more" onclick="addFavoriteInput()">+ Add More</button>
+                    <button id="buildProfileBtn" onclick="buildProfile()" disabled class="btn-primary btn-compact">Build Profile</button>
                 </div>
                 <div id="buildProfileStatus" style="display:none;margin-top:12px;"></div>
             </div>
@@ -248,8 +249,8 @@ function renderHomeTab(app) {
 
         <!-- Dashboard Stats -->
         <div class="home-section">
-            <div style="font-family:'Playfair Display',serif;font-size:1rem;color:#FFE082;margin-bottom:12px;">Your Stats</div>
-            <div id="homeStatsGrid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;">
+            <div class="home-section-title">Your Stats</div>
+            <div id="homeStatsGrid" class="analysis-grid">
                 <div class="analysis-card">
                     <div class="ac-label">Tracks Mastered</div>
                     <div class="ac-value" id="home-val-mastered">--</div>
@@ -263,11 +264,11 @@ function renderHomeTab(app) {
 
         <!-- Error Log (admin only) -->
         <div class="home-section" id="errorLogSection" style="display:none;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-                <div style="font-family:'Playfair Display',serif;font-size:0.9rem;color:#EF4444;">Error Log</div>
-                <button onclick="loadErrorLog()" style="background:none;border:1px solid rgba(239,68,68,0.3);color:#EF4444;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.65rem;">Refresh</button>
+            <div class="error-log-header">
+                <div class="home-section-title" style="color:var(--sbm-danger);margin-bottom:0;">Error Log</div>
+                <button class="btn-error-refresh" onclick="loadErrorLog()">Refresh</button>
             </div>
-            <div id="errorLogEntries" style="font-size:0.7rem;color:#999;max-height:200px;overflow-y:auto;"></div>
+            <div id="errorLogEntries" class="error-log-entries"></div>
         </div>`;
 
     // Load dashboard stats for home
@@ -348,24 +349,24 @@ function renderLibraryTab(app) {
 
         <!-- Mix Archive -->
         <div class="home-section">
-            <div style="font-family:'Playfair Display',serif;font-size:1rem;color:#FFE082;margin-bottom:12px;">Mix Archive</div>
-            <div style="background:rgba(255,255,255,0.03);border:2px dashed rgba(212,160,23,0.3);border-radius:12px;padding:20px;text-align:center;margin-bottom:12px;cursor:pointer;" onclick="document.getElementById('archiveFileLib').click()">
-                <div style="font-size:1.5rem;margin-bottom:4px;">💾</div>
-                <div style="font-size:0.8rem;color:#FFE082;">Upload a mix to archive</div>
-                <div style="font-size:0.65rem;color:#8A7A5A;">MP3, WAV, M4A, FLAC</div>
+            <div class="home-section-title">Mix Archive</div>
+            <div class="upload-zone" onclick="document.getElementById('archiveFileLib').click()">
+                <div class="upload-zone-icon">💾</div>
+                <div class="upload-zone-title">Upload a mix to archive</div>
+                <div class="upload-zone-desc">MP3, WAV, M4A, FLAC</div>
                 <input type="file" id="archiveFileLib" accept="audio/*" style="display:none" onchange="uploadArchiveLibrary(this)">
             </div>
-            <div id="archiveStatusLib" style="display:none;text-align:center;padding:8px;font-size:0.8rem;color:#D4A017;"></div>
-            <div id="archiveListLib" style="font-size:0.8rem;color:#8A7A5A;">Loading...</div>
+            <div id="archiveStatusLib" class="upload-status" style="display:none;"></div>
+            <div id="archiveListLib" class="archive-list">Loading...</div>
         </div>
 
         <!-- Digest a Mix -->
         <div class="home-section">
-            <div style="font-family:'Playfair Display',serif;font-size:1rem;color:#FFE082;margin-bottom:12px;">Identify Tracks</div>
-            <div style="background:rgba(255,255,255,0.03);border:2px dashed rgba(212,160,23,0.3);border-radius:12px;padding:20px;text-align:center;margin-bottom:12px;cursor:pointer;" onclick="document.getElementById('mixFileLib').click()">
-                <div style="font-size:1.5rem;margin-bottom:4px;">🔬</div>
-                <div style="font-size:0.8rem;color:#FFE082;">Upload a mix to identify tracks</div>
-                <div style="font-size:0.65rem;color:#8A7A5A;">Powered by AudD fingerprinting</div>
+            <div class="home-section-title">Identify Tracks</div>
+            <div class="upload-zone" onclick="document.getElementById('mixFileLib').click()">
+                <div class="upload-zone-icon">🔬</div>
+                <div class="upload-zone-title">Upload a mix to identify tracks</div>
+                <div class="upload-zone-desc">Powered by AudD fingerprinting</div>
                 <input type="file" id="mixFileLib" accept="audio/*" style="display:none" onchange="uploadMixLibrary(this)">
             </div>
             <div id="libraryMixStatus" style="display:none;"></div>
@@ -374,8 +375,8 @@ function renderLibraryTab(app) {
 
         <!-- Dashboard -->
         <div class="home-section">
-            <div style="font-family:'Playfair Display',serif;font-size:1rem;color:#FFE082;margin-bottom:12px;">Stats</div>
-            <div id="libStatsGrid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;">
+            <div class="home-section-title">Stats</div>
+            <div id="libStatsGrid" class="analysis-grid">
                 <div class="analysis-card">
                     <div class="ac-label">Tracks Mastered</div>
                     <div class="ac-value" id="lib-val-mastered">--</div>
