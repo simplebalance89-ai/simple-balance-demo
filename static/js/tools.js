@@ -1,3 +1,63 @@
+/* ===== ESSENTIA.JS CLIENT-SIDE AUDIO ANALYSIS ===== */
+
+var essentiaInstance = null;
+
+function getEssentia() {
+    if (essentiaInstance) return Promise.resolve(essentiaInstance);
+    return new Promise(function(resolve, reject) {
+        if (typeof EssentiaWASM === 'undefined') { reject(new Error('Essentia WASM not loaded')); return; }
+        EssentiaWASM().then(function(wasmModule) {
+            essentiaInstance = new Essentia(wasmModule);
+            resolve(essentiaInstance);
+        }).catch(reject);
+    });
+}
+
+function analyzeAudioLocal(file) {
+    return new Promise(function(resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function() {
+            var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            audioCtx.decodeAudioData(reader.result).then(function(buffer) {
+                getEssentia().then(function(essentia) {
+                    var mono = buffer.getChannelData(0);
+                    var vector = essentia.arrayToVector(mono);
+                    var results = {};
+
+                    // BPM detection
+                    try {
+                        var rhythm = essentia.RhythmExtractor2013(vector);
+                        results.bpm = Math.round(rhythm.bpm);
+                        results.bpm_confidence = Math.round(rhythm.confidence * 100);
+                    } catch(e) { results.bpm = null; }
+
+                    // Key detection
+                    try {
+                        var keyResult = essentia.KeyExtractor(vector);
+                        results.key = keyResult.key + ' ' + keyResult.scale;
+                        results.key_strength = Math.round(keyResult.strength * 100);
+                    } catch(e) { results.key = null; }
+
+                    // Loudness
+                    try {
+                        var loudness = essentia.Loudness(vector);
+                        results.loudness = Math.round(loudness.loudness * 100) / 100;
+                    } catch(e) { results.loudness = null; }
+
+                    // Duration
+                    results.duration = Math.round(buffer.duration);
+                    results.sample_rate = buffer.sampleRate;
+
+                    audioCtx.close();
+                    resolve(results);
+                }).catch(function(e) { audioCtx.close(); reject(e); });
+            }).catch(reject);
+        };
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(file);
+    });
+}
+
 /* ===== EXPERIENCE BUILDERS ===== */
 
 /* --- JAW DJ Command (Chat) --- */
@@ -160,37 +220,56 @@ function uploadForMastering(input) {
     dropZone.style.display = 'none';
     status.style.display = 'block';
     results.style.display = 'none';
-    msg.textContent = 'Uploading "' + file.name + '"...';
-    bar.style.width = '20%';
-    var formData = new FormData();
-    formData.append('file', file);
-    setTimeout(function(){ msg.textContent = 'Running AI mastering analysis...'; bar.style.width = '50%'; }, 1000);
-    setTimeout(function(){ msg.textContent = 'Generating recommendations...'; bar.style.width = '75%'; }, 3000);
-    fetch('/api/analyze', { method: 'POST', body: formData })
-    .then(function(r){ return r.json(); })
-    .then(function(data){
-        bar.style.width = '100%';
-        if (data.error) { msg.textContent = 'Error: ' + data.error; msg.style.color = '#C41E3A'; return; }
-        status.style.display = 'none';
-        results.style.display = 'block';
-        var recs = (data.recommendations || []).map(function(r){ return '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;"><span style="color:#D4A017;">&#9679;</span><span style="font-size:0.8rem;color:#E0C8A0;">' + r + '</span></div>'; }).join('');
-        var scoreColor = data.quality_score >= 70 ? '#4CAF50' : (data.quality_score >= 40 ? '#D4A017' : '#C41E3A');
-        results.innerHTML =
-            '<div style="text-align:center;margin-bottom:16px;">' +
-                '<span style="font-family:Playfair Display,serif;font-size:1.2rem;color:#FFE082;">Analysis: ' + (data.filename || file.name) + '</span>' +
-                (data.genre_detected ? '<div style="font-size:0.65rem;color:#8A7A5A;margin-top:4px;">Detected genre: ' + data.genre_detected + '</div>' : '') +
-            '</div>' +
-            '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px;">' +
-                buildAnalysisCard('BPM', data.bpm || '—', 'Tempo detected') +
-                buildAnalysisCard('Key', data.key || '—', data.camelot ? 'Camelot: ' + data.camelot : '') +
-                buildAnalysisCard('LUFS', data.lufs || '—', 'Integrated loudness') +
-                buildAnalysisCard('True Peak', (data.true_peak || '—') + ' dB', data.dynamic_range ? 'DR: ' + data.dynamic_range + ' dB' : '') +
-            '</div>' +
-            (data.quality_score ? '<div style="text-align:center;margin-bottom:16px;"><div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:1px;color:#8A7A5A;margin-bottom:6px;">Quality Score</div><div style="display:inline-flex;width:60px;height:60px;border-radius:50%;border:3px solid ' + scoreColor + ';align-items:center;justify-content:center;"><span style="font-family:Playfair Display,serif;font-size:1.3rem;font-weight:700;color:#FFE082;">' + data.quality_score + '</span></div></div>' : '') +
-            (recs ? '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:16px;margin-bottom:16px;"><div style="font-family:Playfair Display,serif;font-size:0.9rem;color:#FFE082;margin-bottom:12px;">Mastering Recommendations</div>' + recs + '</div>' : '') +
-            '<div style="text-align:center;margin-top:16px;"><button class="btn-primary" onclick="resetMastering()" style="font-size:0.8rem;padding:10px 24px;">Analyze Another Track</button></div>';
-    })
-    .catch(function(err){ bar.style.width = '100%'; msg.textContent = 'Upload failed: ' + err.message; msg.style.color = '#C41E3A'; });
+    msg.textContent = 'Analyzing "' + file.name + '" in browser...';
+    bar.style.width = '10%';
+
+    // Phase 1: Client-side analysis with Essentia.js (instant BPM + key)
+    var localResults = {};
+    analyzeAudioLocal(file).then(function(local) {
+        localResults = local;
+        msg.textContent = 'BPM: ' + (local.bpm || '?') + ' | Key: ' + (local.key || '?') + ' — Uploading for deep analysis...';
+        bar.style.width = '40%';
+    }).catch(function() {
+        msg.textContent = 'Uploading for server analysis...';
+        bar.style.width = '30%';
+    }).finally(function() {
+        // Phase 2: Upload to server for LUFS + AI recommendations
+        var formData = new FormData();
+        formData.append('file', file);
+        setTimeout(function(){ msg.textContent = 'Running AI mastering analysis...'; bar.style.width = '60%'; }, 1500);
+        setTimeout(function(){ msg.textContent = 'Generating recommendations...'; bar.style.width = '80%'; }, 4000);
+        fetch('/api/analyze', { method: 'POST', body: formData })
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+            bar.style.width = '100%';
+            if (data.error) { msg.textContent = 'Error: ' + data.error; msg.style.color = '#C41E3A'; return; }
+            // Merge: prefer client-side BPM/key if server didn't detect
+            var bpm = data.bpm || localResults.bpm || '—';
+            var key = data.key || localResults.key || '—';
+            var bpmSource = localResults.bpm ? ' (Essentia.js)' : '';
+            var keySource = localResults.key ? ' (Essentia.js)' : '';
+            status.style.display = 'none';
+            results.style.display = 'block';
+            var recs = (data.recommendations || []).map(function(r){ return '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;"><span style="color:#D4A017;">&#9679;</span><span style="font-size:0.8rem;color:#E0C8A0;">' + r + '</span></div>'; }).join('');
+            var scoreColor = data.quality_score >= 70 ? '#4CAF50' : (data.quality_score >= 40 ? '#D4A017' : '#C41E3A');
+            results.innerHTML =
+                '<div style="text-align:center;margin-bottom:16px;">' +
+                    '<span style="font-family:Playfair Display,serif;font-size:1.2rem;color:#FFE082;">Analysis: ' + (data.filename || file.name) + '</span>' +
+                    (data.genre_detected ? '<div style="font-size:0.65rem;color:#8A7A5A;margin-top:4px;">Detected genre: ' + data.genre_detected + '</div>' : '') +
+                '</div>' +
+                '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px;">' +
+                    buildAnalysisCard('BPM', bpm, 'Tempo' + bpmSource) +
+                    buildAnalysisCard('Key', key, (data.camelot ? 'Camelot: ' + data.camelot : '') + keySource) +
+                    buildAnalysisCard('LUFS', data.lufs || '—', 'Integrated loudness') +
+                    buildAnalysisCard('True Peak', (data.true_peak || '—') + ' dB', data.dynamic_range ? 'DR: ' + data.dynamic_range + ' dB' : '') +
+                '</div>' +
+                (localResults.duration ? '<div style="text-align:center;font-size:0.7rem;color:#8A7A5A;margin-bottom:12px;">Duration: ' + Math.floor(localResults.duration/60) + ':' + ('0' + (localResults.duration%60)).slice(-2) + (localResults.bpm_confidence ? ' | BPM confidence: ' + localResults.bpm_confidence + '%' : '') + (localResults.key_strength ? ' | Key strength: ' + localResults.key_strength + '%' : '') + '</div>' : '') +
+                (data.quality_score ? '<div style="text-align:center;margin-bottom:16px;"><div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:1px;color:#8A7A5A;margin-bottom:6px;">Quality Score</div><div style="display:inline-flex;width:60px;height:60px;border-radius:50%;border:3px solid ' + scoreColor + ';align-items:center;justify-content:center;"><span style="font-family:Playfair Display,serif;font-size:1.3rem;font-weight:700;color:#FFE082;">' + data.quality_score + '</span></div></div>' : '') +
+                (recs ? '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:16px;margin-bottom:16px;"><div style="font-family:Playfair Display,serif;font-size:0.9rem;color:#FFE082;margin-bottom:12px;">Mastering Recommendations</div>' + recs + '</div>' : '') +
+                '<div style="text-align:center;margin-top:16px;"><button class="btn-primary" onclick="resetMastering()" style="font-size:0.8rem;padding:10px 24px;">Analyze Another Track</button></div>';
+        })
+        .catch(function(err){ bar.style.width = '100%'; msg.textContent = 'Upload failed: ' + err.message; msg.style.color = '#C41E3A'; });
+    });
 }
 
 function resetMastering() {
