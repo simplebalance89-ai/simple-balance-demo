@@ -1771,7 +1771,7 @@ async def _tidal_get_user_token(session: str) -> str | None:
                         "grant_type": "refresh_token",
                         "refresh_token": refresh_token,
                         "client_id": client_id,
-                        "scope": "r_usr w_usr",
+                        "scope": "user.read collection.read search.read playlists.read playlists.write entitlements.read collection.write playback recommendations.read",
                     },
                 )
                 if resp.status_code == 200:
@@ -1816,7 +1816,7 @@ async def tidal_login(redirect_to: str = "/"):
         "client_id": client_id,
         "response_type": "code",
         "redirect_uri": TIDAL_REDIRECT_URI,
-        "scope": "r_usr w_usr",
+        "scope": "user.read collection.read search.read playlists.read playlists.write entitlements.read collection.write playback recommendations.read",
         "state": state,
         "code_challenge": code_challenge,
         "code_challenge_method": "S256",
@@ -1855,7 +1855,7 @@ async def tidal_callback(code: str = "", error: str = "", state: str = ""):
                     "redirect_uri": TIDAL_REDIRECT_URI,
                     "client_id": client_id,
                     "code_verifier": pkce["code_verifier"],
-                    "scope": "r_usr w_usr",
+                    "scope": "user.read collection.read search.read playlists.read playlists.write entitlements.read collection.write playback recommendations.read",
                 },
             )
             resp.raise_for_status()
