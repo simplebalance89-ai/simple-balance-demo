@@ -67,22 +67,61 @@ var TOOL_TABS = [
         .catch(() => {});
 })();
 
+/* ===== CATEGORY DEFINITIONS ===== */
+var CATEGORIES = {
+    studio: {
+        title: 'Studio',
+        sub: 'Master, remix, generate, and perform',
+        tools: [
+            { mode: 'digestor',  icon: '🔬', name: 'Digestor',   desc: 'Extract tracklists from DJ mixes' },
+            { mode: 'liveaudit', icon: '🔍', name: 'Live Audit', desc: 'Full set analysis — tracklist, BPM, transitions' },
+            { mode: 'stems',     icon: '🔀', name: 'Stems',      desc: 'Separate vocals, drums, bass, melody' },
+            { mode: 'generation',icon: '🎹', name: 'Generate',   desc: 'Create beats and loops with AI' },
+            { mode: 'mastering', icon: '🎚️', name: 'Master',     desc: 'Upload a track for AI mastering analysis' },
+            { mode: 'samples',   icon: '🎙️', name: 'Samples',    desc: 'Record, tag, and auto-ID audio samples' }
+        ]
+    },
+    discover: {
+        title: 'Discover',
+        sub: 'Find music, events, and track IDs',
+        tools: [
+            { mode: 'shazam',    icon: '🎧', name: 'Live ID',    desc: 'Mic-based real-time track identification' },
+            { mode: 'discovery', icon: '🧭', name: 'Discover',   desc: 'Mood-based AI track recommendations' },
+            { mode: 'events',    icon: '📍', name: 'Events',     desc: 'Upcoming shows and festivals near you' }
+        ]
+    },
+    library: {
+        title: 'Library',
+        sub: 'Your sets, samples, press kit, and more',
+        tools: [
+            { mode: 'setbuilder',icon: '📋', name: 'Sets',       desc: 'Build and plan DJ sets with AI' },
+            { mode: 'archive',   icon: '📚', name: 'Archive',    desc: 'Your saved mixes, tracks, and history' },
+            { mode: 'presskit',  icon: '📋', name: 'Press Kit',  desc: 'Build your EPK for bookings and promos' },
+            { mode: 'vibecheck', icon: '📡', name: 'Vibe Check', desc: 'Live session — audience sees tracks & requests' },
+            { mode: 'board',     icon: '📝', name: 'Board',      desc: 'Status board and project tracking' },
+            { mode: 'tools',     icon: '🛠️', name: 'Tools',      desc: 'BPM tap, key finder, utilities' }
+        ]
+    }
+};
+
 /* ===== BOTTOM NAV ===== */
 function sbmNavTo(section) {
     document.querySelectorAll('.sbm-nav-btn').forEach(function(b) { b.classList.remove('active'); });
     var btn = document.getElementById('nav' + section.charAt(0).toUpperCase() + section.slice(1));
     if (btn) btn.classList.add('active');
 
+    // Hide tool tabs strip — we use category pages now
+    var tabsWrap = document.getElementById('toolTabsWrap');
+    if (tabsWrap) tabsWrap.style.display = 'none';
+
     if (section === 'home') {
         selectedMode = null;
-        renderToolTabs();
+        currentTab = 'home';
         renderHomeContent();
-    } else if (section === 'studio') {
-        selectTool('mastering');
-    } else if (section === 'discover') {
-        selectTool('discovery');
-    } else if (section === 'library') {
-        selectTool('archive');
+    } else if (CATEGORIES[section]) {
+        selectedMode = null;
+        currentTab = section;
+        renderCategoryPage(section);
     }
     window.scrollTo(0, 0);
 }
@@ -117,38 +156,73 @@ function loadErrorLog() {
     .catch(function() {});
 }
 
-/* ===== RENDER TOOL TABS ===== */
+/* ===== RENDER TOOL TABS (legacy — hidden by default now) ===== */
 function renderToolTabs() {
-    var container = document.getElementById('toolTabs');
-    if (!container) return;
+    // No-op: tool tabs strip replaced by category pages
+}
 
-    var html = '';
-    TOOL_TABS.forEach(function(t) {
-        var active = selectedMode === t.mode ? ' active' : '';
-        html += '<div class="tool-tab' + active + '" onclick="selectTool(\'' + t.mode + '\')">' +
-                '<span class="tool-tab-icon">' + t.icon + '</span>' +
-                '<span class="tool-tab-label">' + t.label + '</span>' +
-                '</div>';
+/* ===== RENDER CATEGORY PAGE ===== */
+function renderCategoryPage(section) {
+    var cat = CATEGORIES[section];
+    if (!cat) return;
+    var area = document.getElementById('contentArea');
+    if (!area) return;
+
+    var html = '<div class="category-page">' +
+        '<div class="category-header">' +
+            '<h1 class="category-title">' + cat.title + '</h1>' +
+            '<p class="category-sub">' + cat.sub + '</p>' +
+        '</div>' +
+        '<div class="category-grid">';
+
+    cat.tools.forEach(function(t) {
+        html += '<div class="category-card" onclick="selectTool(\'' + t.mode + '\')">' +
+            '<div class="category-card-icon">' + t.icon + '</div>' +
+            '<div class="category-card-body">' +
+                '<div class="category-card-name">' + t.name + '</div>' +
+                '<div class="category-card-desc">' + t.desc + '</div>' +
+            '</div>' +
+            '<div class="category-card-arrow">&#8250;</div>' +
+        '</div>';
     });
-    container.innerHTML = html;
+
+    html += '</div></div>';
+    area.innerHTML = html;
 }
 
 /* ===== SELECT TOOL ===== */
 function selectTool(mode) {
     if (selectedMode === mode) {
-        // Toggle off — go back to home
+        // Toggle off — go back to current category or home
         selectedMode = null;
-        renderToolTabs();
-        renderHomeContent();
+        if (currentTab && CATEGORIES[currentTab]) {
+            renderCategoryPage(currentTab);
+        } else {
+            renderHomeContent();
+        }
         return;
     }
     selectedMode = mode;
-    renderToolTabs();
 
     var area = document.getElementById('contentArea');
     if (!area) return;
-    buildExperienceInto(area);
-    area.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    // Add back button
+    var backTarget = currentTab || 'home';
+    var backLabel = CATEGORIES[backTarget] ? CATEGORIES[backTarget].title : 'Home';
+    var backHtml = '<div class="tool-back-row">' +
+        '<button class="tool-back-btn" onclick="sbmNavTo(\'' + backTarget + '\')">' +
+            '&#8249; ' + backLabel +
+        '</button>' +
+        '<span class="tool-back-title">' + (MODE_NAMES[mode] || mode) + '</span>' +
+    '</div>';
+
+    area.innerHTML = backHtml;
+    var toolArea = document.createElement('div');
+    toolArea.className = 'tool-content-area';
+    area.appendChild(toolArea);
+    buildExperienceInto(toolArea);
+    window.scrollTo(0, 0);
 }
 
 /* ===== LAUNCH MODE (backwards compat) ===== */
@@ -156,47 +230,34 @@ function launchMode(mode) {
     selectTool(mode);
 }
 
-/* ===== NAV TAB (backwards compat — now just selects tools) ===== */
+/* ===== NAV TAB (backwards compat) ===== */
 function navigateTab(tabName) {
-    if (tabName === 'home') {
-        selectedMode = null;
-        renderToolTabs();
-        renderHomeContent();
-    } else if (tabName === 'discover') {
-        selectTool('jaw');
-    } else if (tabName === 'studio') {
-        selectTool('mastering');
-    } else if (tabName === 'library') {
-        // Show archive
-        selectedMode = null;
-        renderToolTabs();
-        renderHomeContent();
-    }
+    sbmNavTo(tabName === 'discover' ? 'discover' : tabName === 'studio' ? 'studio' : tabName === 'library' ? 'library' : 'home');
 }
 
 /* ===== BUILD EXPERIENCE ===== */
 function buildExperienceInto(area) {
-    const name = 'Producer';
-    const modeName = MODE_NAMES[selectedMode] || 'Mode';
+    var displayName = (sbmProfile && sbmProfile.display_name) ? sbmProfile.display_name : 'Producer';
+    var modeName = MODE_NAMES[selectedMode] || 'Mode';
 
-    if (selectedMode === 'jaw') area.innerHTML = buildJAWExperience(name, modeName);
-    else if (selectedMode === 'mastering') area.innerHTML = buildMasteringExperience(name, modeName);
-    else if (selectedMode === 'discovery') area.innerHTML = buildDiscoveryExperience(name, modeName);
-    else if (selectedMode === 'generation') area.innerHTML = buildGenerationExperience(name, modeName);
-    else if (selectedMode === 'digestor') area.innerHTML = buildDigestorExperience(name, modeName);
-    else if (selectedMode === 'shazam') area.innerHTML = buildShazamExperience(name, modeName);
-    else if (selectedMode === 'stems') area.innerHTML = buildStemsExperience(name, modeName);
-    else if (selectedMode === 'events') area.innerHTML = buildEventsExperience(name, modeName);
-    else if (selectedMode === 'setbuilder') area.innerHTML = buildSetBuilderExperience(name, modeName);
-    else if (selectedMode === 'archive') { area.innerHTML = buildArchiveExperience(name, modeName); loadArchiveList(); }
-    else if (selectedMode === 'liveaudit') area.innerHTML = buildLiveAuditExperience(name, modeName);
-    else if (selectedMode === 'presskit') area.innerHTML = buildPressKitExperience(name, modeName);
-    else if (selectedMode === 'samples') { area.innerHTML = buildSampleSaverExperience(name, modeName); renderSampleList(); }
-    else if (selectedMode === 'tools') area.innerHTML = buildToolsExperience(name, modeName);
-    else if (selectedMode === 'dashboard') { area.innerHTML = buildDashboardExperience(name, modeName); loadDashboardStats(); }
-    else if (selectedMode === 'vibecheck') { area.innerHTML = buildVibeCheckExperience(name, modeName); }
-    else if (selectedMode === 'board') { area.innerHTML = buildStatusBoardExperience(name, modeName); initSBMBoard(); }
-    else area.innerHTML = buildDefaultExperience(name, modeName);
+    if (selectedMode === 'jaw') area.innerHTML = buildJAWExperience(displayName, modeName);
+    else if (selectedMode === 'mastering') area.innerHTML = buildMasteringExperience(displayName, modeName);
+    else if (selectedMode === 'discovery') area.innerHTML = buildDiscoveryExperience(displayName, modeName);
+    else if (selectedMode === 'generation') area.innerHTML = buildGenerationExperience(displayName, modeName);
+    else if (selectedMode === 'digestor') area.innerHTML = buildDigestorExperience(displayName, modeName);
+    else if (selectedMode === 'shazam') area.innerHTML = buildShazamExperience(displayName, modeName);
+    else if (selectedMode === 'stems') area.innerHTML = buildStemsExperience(displayName, modeName);
+    else if (selectedMode === 'events') area.innerHTML = buildEventsExperience(displayName, modeName);
+    else if (selectedMode === 'setbuilder') area.innerHTML = buildSetBuilderExperience(displayName, modeName);
+    else if (selectedMode === 'archive') { area.innerHTML = buildArchiveExperience(displayName, modeName); loadArchiveList(); }
+    else if (selectedMode === 'liveaudit') area.innerHTML = buildLiveAuditExperience(displayName, modeName);
+    else if (selectedMode === 'presskit') area.innerHTML = buildPressKitExperience(displayName, modeName);
+    else if (selectedMode === 'samples') { area.innerHTML = buildSampleSaverExperience(displayName, modeName); renderSampleList(); }
+    else if (selectedMode === 'tools') area.innerHTML = buildToolsExperience(displayName, modeName);
+    else if (selectedMode === 'dashboard') { area.innerHTML = buildDashboardExperience(displayName, modeName); loadDashboardStats(); }
+    else if (selectedMode === 'vibecheck') { area.innerHTML = buildVibeCheckExperience(displayName, modeName); }
+    else if (selectedMode === 'board') { area.innerHTML = buildStatusBoardExperience(displayName, modeName); initSBMBoard(); }
+    else area.innerHTML = buildDefaultExperience(displayName, modeName);
 }
 
 /* ===== HOME CONTENT (when no tool selected) ===== */
@@ -208,64 +269,44 @@ function renderHomeContent() {
     var avatarColor = (sbmProfile && sbmProfile.color) ? sbmProfile.color : '#D4A017';
     var initial = displayName.charAt(0).toUpperCase();
 
-    // Swim lane card builder — single column, horizontal cards
-    function buildCards(list) {
-        return list.map(function(f) {
-            var statusBadge = f.status === 'live'
-                ? '<span class="feature-badge feature-badge-live">Live</span>'
-                : f.status === 'new'
-                ? '<span class="feature-badge feature-badge-new">New</span>'
-                : '<span class="feature-badge feature-badge-testing">Testing</span>';
-            return '<div class="feature-card" onclick="selectTool(\'' + f.mode + '\')">' +
-                '<span class="feature-card-icon">' + f.icon + '</span>' +
-                '<div class="feature-card-body">' +
-                    '<div class="feature-card-name">' + f.name + '</div>' +
-                    '<div class="feature-card-desc">' + f.desc + '</div>' +
-                '</div>' +
-                '<div class="feature-card-badge">' + statusBadge + '</div>' +
-            '</div>';
-        }).join('');
-    }
-
-    // Profile lane — things that build your identity
-    var profileTools = [
-        { mode: 'discovery', icon: '🧭', name: 'Discover', desc: 'Mood-based AI track recommendations', status: 'live' },
-        { mode: 'events', icon: '📍', name: 'Events', desc: 'Upcoming shows and festivals near you', status: 'testing' },
-        { mode: 'presskit', icon: '📋', name: 'Press Kit', desc: 'Build your EPK for bookings and promos', status: 'new' },
-        { mode: 'samples', icon: '🎙️', name: 'Samples', desc: 'Record, tag, and auto-ID audio samples', status: 'new' }
-    ];
-
-    // Studio lane — production & performance tools
-    var studioTools = [
-        { mode: 'jaw', icon: '🎙️', name: 'J.A.W.', desc: 'AI DJ advisor — mixing, sets, keys, energy flow', status: 'live' },
-        { mode: 'mastering', icon: '🎚️', name: 'Master', desc: 'Upload a track for AI mastering analysis', status: 'live' },
-        { mode: 'stems', icon: '🔀', name: 'Stems', desc: 'Separate vocals, drums, bass, melody', status: 'testing' },
-        { mode: 'generation', icon: '🎹', name: 'Generate', desc: 'Create beats and loops with AI', status: 'live' },
-        { mode: 'digestor', icon: '🔬', name: 'Digest', desc: 'Extract tracklists from DJ mixes', status: 'live' },
-        { mode: 'shazam', icon: '🎧', name: 'Live ID', desc: 'Mic-based real-time track identification', status: 'live' },
-        { mode: 'setbuilder', icon: '📋', name: 'Sets', desc: 'Build and plan DJ sets with AI', status: 'testing' },
-        { mode: 'liveaudit', icon: '🔍', name: 'Live Audit', desc: 'Full set analysis — tracklist, BPM, transitions', status: 'new' },
-        { mode: 'tools', icon: '🛠️', name: 'Tools', desc: 'BPM tap, key finder, utilities', status: 'testing' },
-        { mode: 'vibecheck', icon: '📡', name: 'Vibe Check', desc: 'Live session — audience sees tracks & requests songs', status: 'new' }
-    ];
-
     area.innerHTML =
-        // Welcome Header
-        '<div class="home-welcome">' +
-            '<div class="welcome-avatar" style="background:' + avatarColor + ';">' + initial + '</div>' +
-            '<div class="welcome-text">' +
-                '<div class="welcome-greeting">Welcome back, ' + escapeHTML(displayName) + '</div>' +
-                '<div class="welcome-sub">Your AI production suite is ready.</div>' +
+        // Hero Banner
+        '<div class="hero-banner">' +
+            '<div class="hero-bg-pattern"></div>' +
+            '<div class="hero-content">' +
+                '<div class="hero-brand">simple / balance</div>' +
+                '<div class="hero-tagline">Your crew. Your sound. Your edge.</div>' +
+                '<div class="hero-welcome">' +
+                    '<div class="welcome-avatar" style="background:' + avatarColor + ';">' + initial + '</div>' +
+                    '<span>Welcome back, ' + escapeHTML(displayName) + '</span>' +
+                '</div>' +
             '</div>' +
         '</div>' +
 
-        // SWIM LANE: Your Profile
-        '<div class="swim-lane">' +
-            '<div class="swim-lane-header">' +
-                '<div class="swim-lane-title">Your Profile</div>' +
-                '<div class="swim-lane-sub">Connect services, build your taste, discover music</div>' +
+        // Quick Actions
+        '<div class="quick-actions">' +
+            '<div class="quick-action-card" onclick="selectTool(\'digestor\')">' +
+                '<div class="qa-icon">🔬</div>' +
+                '<div class="qa-label">Upload a Mix</div>' +
             '</div>' +
-            '<div class="connect-row">' +
+            '<div class="quick-action-card" onclick="selectTool(\'shazam\')">' +
+                '<div class="qa-icon">🎧</div>' +
+                '<div class="qa-label">ID a Track</div>' +
+            '</div>' +
+            '<div class="quick-action-card" onclick="toggleJawPanel()">' +
+                '<div class="qa-icon">🎙️</div>' +
+                '<div class="qa-label">Ask J.A.W.</div>' +
+            '</div>' +
+            '<div class="quick-action-card" onclick="sbmNavTo(\'studio\')">' +
+                '<div class="qa-icon">🎚️</div>' +
+                '<div class="qa-label">Open Studio</div>' +
+            '</div>' +
+        '</div>' +
+
+        // Connect Services
+        '<div class="home-section-block">' +
+            '<div class="section-block-title">Connect Your Music</div>' +
+            '<div class="connect-row-home">' +
                 '<div id="spotifyCard" class="connect-chip connect-spotify" onclick="connectSpotify()">' +
                     '<span class="connect-chip-dot" style="background:#1DB954;"></span>' +
                     '<span class="connect-chip-name">Spotify</span>' +
@@ -279,12 +320,12 @@ function renderHomeContent() {
                 '<div id="beatportCard" class="connect-chip" onclick="connectBeatport()" style="border-color:rgba(150,200,60,0.3);">' +
                     '<span class="connect-chip-dot" style="background:#96C83C;"></span>' +
                     '<span class="connect-chip-name">Beatport</span>' +
-                    '<span class="cc-status connect-chip-status">Coming Soon</span>' +
+                    '<span class="cc-status connect-chip-status">Soon</span>' +
                 '</div>' +
                 '<div id="ticketmasterCard" class="connect-chip" onclick="connectTicketmaster()" style="border-color:rgba(0,150,214,0.3);">' +
                     '<span class="connect-chip-dot" style="background:#0096D6;"></span>' +
                     '<span class="connect-chip-name">Ticketmaster</span>' +
-                    '<span class="cc-status connect-chip-status">Coming Soon</span>' +
+                    '<span class="cc-status connect-chip-status">Soon</span>' +
                 '</div>' +
             '</div>' +
             '<div id="spotifyLibrary" class="service-library service-library-spotify" style="display:none;">' +
@@ -307,16 +348,28 @@ function renderHomeContent() {
             '</div>' +
             '<div id="buildProfileResults"></div>' +
             '<div id="profileTrackBadge" style="display:none;margin-top:8px;font-size:0.7rem;color:#D4A017;text-align:center;"></div>' +
-            '<div class="feature-grid">' + buildCards(profileTools) + '</div>' +
         '</div>' +
 
-        // SWIM LANE: Studio
-        '<div class="swim-lane">' +
-            '<div class="swim-lane-header">' +
-                '<div class="swim-lane-title">Studio</div>' +
-                '<div class="swim-lane-sub">Master, remix, generate, and perform</div>' +
+        // What's Inside — preview of categories
+        '<div class="home-section-block">' +
+            '<div class="section-block-title">What\'s Inside</div>' +
+            '<div class="category-preview-grid">' +
+                '<div class="category-preview" onclick="sbmNavTo(\'studio\')">' +
+                    '<div class="cp-icon">🎚️</div>' +
+                    '<div class="cp-title">Studio</div>' +
+                    '<div class="cp-desc">6 production tools</div>' +
+                '</div>' +
+                '<div class="category-preview" onclick="sbmNavTo(\'discover\')">' +
+                    '<div class="cp-icon">🧭</div>' +
+                    '<div class="cp-title">Discover</div>' +
+                    '<div class="cp-desc">3 discovery tools</div>' +
+                '</div>' +
+                '<div class="category-preview" onclick="sbmNavTo(\'library\')">' +
+                    '<div class="cp-icon">📚</div>' +
+                    '<div class="cp-title">Library</div>' +
+                    '<div class="cp-desc">6 management tools</div>' +
+                '</div>' +
             '</div>' +
-            '<div class="feature-grid">' + buildCards(studioTools) + '</div>' +
         '</div>' +
 
         // Error Log
@@ -360,6 +413,8 @@ function renderHomeContent() {
 
 /* ===== INIT ===== */
 document.addEventListener('DOMContentLoaded', function() {
-    renderToolTabs();
+    // Hide legacy tool tabs strip
+    var tabsWrap = document.getElementById('toolTabsWrap');
+    if (tabsWrap) tabsWrap.style.display = 'none';
     renderHomeContent();
 });
