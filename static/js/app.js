@@ -161,75 +161,101 @@ function renderHomeContent() {
     var area = document.getElementById('contentArea');
     if (!area) return;
 
-    area.innerHTML = `
-        <!-- Connect Services -->
-        <div class="home-section">
-            <div class="connect-row">
-                <div id="spotifyCard" class="connect-chip connect-spotify" onclick="connectSpotify()">
-                    <span class="connect-chip-dot" style="background:#1DB954;"></span>
-                    <span class="connect-chip-name">Spotify</span>
-                    <span class="cc-status connect-chip-status">Connect</span>
-                </div>
-                <div id="tidalCard" class="connect-chip connect-tidal" onclick="connectTidal()">
-                    <span class="connect-chip-dot" style="background:#00BFFF;"></span>
-                    <span class="connect-chip-name">Tidal</span>
-                    <span class="cc-status connect-chip-status">Connect</span>
-                </div>
-            </div>
+    var displayName = (sbmProfile && sbmProfile.display_name) ? sbmProfile.display_name : 'Producer';
+    var avatarColor = (sbmProfile && sbmProfile.color) ? sbmProfile.color : '#D4A017';
+    var initial = displayName.charAt(0).toUpperCase();
 
-            <!-- Spotify Library (hidden until connected) -->
-            <div id="spotifyLibrary" class="service-library service-library-spotify" style="display:none;">
-                <div class="service-library-header">
-                    <span class="service-library-label" id="spotifyUserLabel" style="color:#1DB954;">Spotify</span>
-                </div>
-                <div class="service-search-row">
-                    <input type="text" id="spotifySearchInput" class="service-search-input" placeholder="Search Spotify..." style="border-color:rgba(29,185,84,0.3);" onkeydown="if(event.key==='Enter')spotifySearch()">
-                    <select id="spotifyGenreFilter" class="service-genre-filter">
-                        <option value="">All</option>
-                        <option value="house">House</option>
-                        <option value="techno">Techno</option>
-                        <option value="trance">Trance</option>
-                        <option value="deep house">Deep House</option>
-                        <option value="progressive house">Progressive</option>
-                        <option value="drum and bass">DnB</option>
-                        <option value="ambient">Ambient</option>
-                    </select>
-                    <button class="service-search-btn" style="background:#1DB954;" onclick="spotifySearch()">Go</button>
-                </div>
-                <div id="spotifyPlaylists"></div>
-                <div id="spotifyResults" class="service-results"></div>
-            </div>
+    // Feature cards data
+    var features = [
+        { mode: 'jaw', icon: '🎙️', name: 'J.A.W.', desc: 'AI DJ advisor — mixing, sets, keys, energy flow', status: 'live' },
+        { mode: 'mastering', icon: '🎚️', name: 'Master', desc: 'Upload a track for AI mastering analysis', status: 'live' },
+        { mode: 'digestor', icon: '🔬', name: 'Digest', desc: 'Extract tracklists from DJ mixes', status: 'live' },
+        { mode: 'shazam', icon: '🎧', name: 'Live ID', desc: 'Mic-based real-time track identification', status: 'live' },
+        { mode: 'discovery', icon: '🧭', name: 'Discover', desc: 'Mood-based AI track recommendations', status: 'live' },
+        { mode: 'generation', icon: '🎹', name: 'Generate', desc: 'Create beats and loops with AI', status: 'live' },
+        { mode: 'stems', icon: '🔀', name: 'Stems', desc: 'Separate vocals, drums, bass, melody', status: 'testing' },
+        { mode: 'events', icon: '📍', name: 'Events', desc: 'Upcoming shows and festivals near you', status: 'testing' },
+        { mode: 'setbuilder', icon: '📋', name: 'Sets', desc: 'Build and plan DJ sets with AI', status: 'testing' },
+        { mode: 'tools', icon: '🛠️', name: 'Tools', desc: 'BPM tap, key finder, utilities', status: 'testing' }
+    ];
 
-            <!-- Tidal Library (hidden until connected) -->
-            <div id="tidalLibrary" class="service-library service-library-tidal" style="display:none;">
-                <div class="service-search-row">
-                    <input type="text" id="tidalSearchInput" class="service-search-input" placeholder="Search Tidal..." style="border-color:rgba(0,191,255,0.3);" onkeydown="if(event.key==='Enter')tidalSearch()">
-                    <select id="tidalGenreFilter" class="service-genre-filter">
-                        <option value="">All</option>
-                        <option value="house">House</option>
-                        <option value="techno">Techno</option>
-                        <option value="trance">Trance</option>
-                        <option value="deep house">Deep House</option>
-                        <option value="ambient">Ambient</option>
-                    </select>
-                    <button class="service-search-btn" style="background:#00BFFF;" onclick="tidalSearch()">Go</button>
-                </div>
-                <div id="tidalResults" class="service-results"></div>
-            </div>
-        </div>
+    var featureCards = features.map(function(f) {
+        var statusBadge = f.status === 'live' 
+            ? '<span class="feature-badge feature-badge-live">Live</span>'
+            : '<span class="feature-badge feature-badge-testing">Testing</span>';
+        return '<div class="feature-card" onclick="selectTool(\'' + f.mode + '\')">' +
+            '<div class="feature-card-top">' +
+                '<span class="feature-card-icon">' + f.icon + '</span>' +
+                statusBadge +
+            '</div>' +
+            '<div class="feature-card-name">' + f.name + '</div>' +
+            '<div class="feature-card-desc">' + f.desc + '</div>' +
+        '</div>';
+    }).join('');
 
-        <!-- Music Profile (auto-built, shown if exists) -->
-        <div id="buildProfileResults"></div>
-        <div id="profileTrackBadge" style="display:none;margin-top:8px;font-size:0.7rem;color:#D4A017;text-align:center;"></div>
+    area.innerHTML =
+        // Welcome Header
+        '<div class="home-welcome">' +
+            '<div class="welcome-avatar" style="background:' + avatarColor + ';">' + initial + '</div>' +
+            '<div class="welcome-text">' +
+                '<div class="welcome-greeting">Welcome back, ' + escapeHTML(displayName) + '</div>' +
+                '<div class="welcome-sub">Your AI production suite is ready.</div>' +
+            '</div>' +
+        '</div>' +
 
-        <!-- Error Log (admin only) -->
-        <div class="home-section" id="errorLogSection" style="display:none;">
-            <div class="error-log-header">
-                <div class="home-section-title" style="color:var(--sbm-danger);margin-bottom:0;">Error Log</div>
-                <button class="btn-error-refresh" onclick="loadErrorLog()">Refresh</button>
-            </div>
-            <div id="errorLogEntries" class="error-log-entries"></div>
-        </div>`;
+        // Connect Services
+        '<div class="home-section">' +
+            '<div class="home-section-title">Connected Services</div>' +
+            '<div class="connect-row">' +
+                '<div id="spotifyCard" class="connect-chip connect-spotify" onclick="connectSpotify()">' +
+                    '<span class="connect-chip-dot" style="background:#1DB954;"></span>' +
+                    '<span class="connect-chip-name">Spotify</span>' +
+                    '<span class="cc-status connect-chip-status">Connect</span>' +
+                '</div>' +
+                '<div id="tidalCard" class="connect-chip connect-tidal" onclick="connectTidal()">' +
+                    '<span class="connect-chip-dot" style="background:#00BFFF;"></span>' +
+                    '<span class="connect-chip-name">Tidal</span>' +
+                    '<span class="cc-status connect-chip-status">Connect</span>' +
+                '</div>' +
+            '</div>' +
+            '<div id="spotifyLibrary" class="service-library service-library-spotify" style="display:none;">' +
+                '<div class="service-library-header"><span class="service-library-label" id="spotifyUserLabel" style="color:#1DB954;">Spotify</span></div>' +
+                '<div class="service-search-row">' +
+                    '<input type="text" id="spotifySearchInput" class="service-search-input" placeholder="Search Spotify..." style="border-color:rgba(29,185,84,0.3);" onkeydown="if(event.key===\'Enter\')spotifySearch()">' +
+                    '<select id="spotifyGenreFilter" class="service-genre-filter"><option value="">All</option><option value="house">House</option><option value="techno">Techno</option><option value="trance">Trance</option><option value="deep house">Deep House</option><option value="progressive house">Progressive</option><option value="drum and bass">DnB</option><option value="ambient">Ambient</option></select>' +
+                    '<button class="service-search-btn" style="background:#1DB954;" onclick="spotifySearch()">Go</button>' +
+                '</div>' +
+                '<div id="spotifyPlaylists"></div>' +
+                '<div id="spotifyResults" class="service-results"></div>' +
+            '</div>' +
+            '<div id="tidalLibrary" class="service-library service-library-tidal" style="display:none;">' +
+                '<div class="service-search-row">' +
+                    '<input type="text" id="tidalSearchInput" class="service-search-input" placeholder="Search Tidal..." style="border-color:rgba(0,191,255,0.3);" onkeydown="if(event.key===\'Enter\')tidalSearch()">' +
+                    '<select id="tidalGenreFilter" class="service-genre-filter"><option value="">All</option><option value="house">House</option><option value="techno">Techno</option><option value="trance">Trance</option><option value="deep house">Deep House</option><option value="ambient">Ambient</option></select>' +
+                    '<button class="service-search-btn" style="background:#00BFFF;" onclick="tidalSearch()">Go</button>' +
+                '</div>' +
+                '<div id="tidalResults" class="service-results"></div>' +
+            '</div>' +
+        '</div>' +
+
+        // Music Profile
+        '<div id="buildProfileResults"></div>' +
+        '<div id="profileTrackBadge" style="display:none;margin-top:8px;font-size:0.7rem;color:#D4A017;text-align:center;"></div>' +
+
+        // Feature Grid
+        '<div class="home-section">' +
+            '<div class="home-section-title">Production Tools</div>' +
+            '<div class="feature-grid">' + featureCards + '</div>' +
+        '</div>' +
+
+        // Error Log
+        '<div class="home-section" id="errorLogSection" style="display:none;">' +
+            '<div class="error-log-header">' +
+                '<div class="home-section-title" style="color:var(--sbm-danger);margin-bottom:0;">Error Log</div>' +
+                '<button class="btn-error-refresh" onclick="loadErrorLog()">Refresh</button>' +
+            '</div>' +
+            '<div id="errorLogEntries" class="error-log-entries"></div>' +
+        '</div>';
 
     // Re-apply Spotify/Tidal connected state
     if (typeof spotifyConnected !== 'undefined' && spotifyConnected) updateSpotifyCardUI(true, spotifyUserInfo);

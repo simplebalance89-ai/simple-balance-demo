@@ -1381,3 +1381,133 @@ html { scroll-behavior: smooth; }
     border-radius: 8px;
     animation: skeletonPulse 1.5s ease-in-out infinite;
 }
+
+/* ===== HOME WELCOME ===== */
+.home-welcome {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 24px 20px 16px;
+}
+.welcome-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--sbm-font-display);
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: #0D0D1A;
+    flex-shrink: 0;
+}
+.welcome-greeting {
+    font-family: var(--sbm-font-display);
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--sbm-accent-light);
+}
+.welcome-sub {
+    font-size: 0.8rem;
+    color: var(--sbm-text-muted);
+    margin-top: 2px;
+}
+
+/* ===== HOME SECTIONS ===== */
+.home-section {
+    padding: 0 20px;
+    margin-bottom: 24px;
+}
+.home-section-title {
+    font-family: var(--sbm-font-display);
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--sbm-text-secondary);
+    margin-bottom: 12px;
+    letter-spacing: 0.5px;
+}
+
+/* ===== FEATURE GRID ===== */
+.feature-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+@media (min-width: 769px) {
+    .feature-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+    }
+}
+.feature-card {
+    background: var(--sbm-bg-card);
+    border: 1px solid var(--sbm-border);
+    border-radius: var(--sbm-radius-md);
+    padding: 16px 14px;
+    cursor: pointer;
+    transition: all var(--sbm-transition);
+}
+.feature-card:hover {
+    background: var(--sbm-bg-hover);
+    border-color: var(--sbm-border-accent);
+    transform: translateY(-1px);
+}
+.feature-card:active {
+    transform: translateY(0);
+}
+.feature-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+.feature-card-icon {
+    font-size: 1.5rem;
+    line-height: 1;
+}
+.feature-card-name {
+    font-family: var(--sbm-font-display);
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--sbm-accent-light);
+    margin-bottom: 4px;
+}
+.feature-card-desc {
+    font-size: 0.7rem;
+    color: var(--sbm-text-muted);
+    line-height: 1.4;
+}
+
+/* ===== FEATURE BADGES ===== */
+.feature-badge {
+    font-size: 0.55rem;
+    padding: 2px 8px;
+    border-radius: 100px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.feature-badge-live {
+    background: rgba(34,197,94,0.15);
+    color: #22c55e;
+}
+.feature-badge-testing {
+    background: rgba(245,158,11,0.15);
+    color: #f59e0b;
+}
+
+/* ===== PROFILE CARD (improved) ===== */
+.profile-card {
+    background: var(--sbm-bg-card);
+    border: 1px solid var(--sbm-border-accent);
+    border-radius: var(--sbm-radius-lg);
+    padding: 20px;
+    margin: 0 20px 16px;
+}
+.profile-card h3 {
+    font-family: var(--sbm-font-display);
+    font-size: 1.1rem;
+    color: var(--sbm-accent-light);
+    margin-bottom: 12px;
+}
