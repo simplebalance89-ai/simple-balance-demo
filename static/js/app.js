@@ -57,6 +57,14 @@ var TOOL_TABS = [
         .catch(() => {});
 })();
 
+/* ===== BEATPORT & TICKETMASTER — Placeholder Connects ===== */
+function connectBeatport() {
+    sbmToast('Beatport integration coming soon — DJ charts, top tracks, and purchase links.', 'info');
+}
+function connectTicketmaster() {
+    sbmToast('Ticketmaster integration coming soon — live events, concerts, and ticket alerts.', 'info');
+}
+
 /* ===== ERROR LOG ===== */
 function loadErrorLog() {
     fetch('/api/errors?limit=20')
@@ -226,6 +234,16 @@ function renderHomeContent() {
                     '<span class="connect-chip-dot" style="background:#00BFFF;"></span>' +
                     '<span class="connect-chip-name">Tidal</span>' +
                     '<span class="cc-status connect-chip-status">Connect</span>' +
+                '</div>' +
+                '<div id="beatportCard" class="connect-chip" onclick="connectBeatport()" style="border-color:rgba(150,200,60,0.3);">' +
+                    '<span class="connect-chip-dot" style="background:#96C83C;"></span>' +
+                    '<span class="connect-chip-name">Beatport</span>' +
+                    '<span class="cc-status connect-chip-status">Coming Soon</span>' +
+                '</div>' +
+                '<div id="ticketmasterCard" class="connect-chip" onclick="connectTicketmaster()" style="border-color:rgba(0,150,214,0.3);">' +
+                    '<span class="connect-chip-dot" style="background:#0096D6;"></span>' +
+                    '<span class="connect-chip-name">Ticketmaster</span>' +
+                    '<span class="cc-status connect-chip-status">Coming Soon</span>' +
                 '</div>' +
             '</div>' +
             '<div id="spotifyLibrary" class="service-library service-library-spotify" style="display:none;">' +
