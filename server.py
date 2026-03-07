@@ -427,7 +427,7 @@ async def download_audio_file(job_id: str):
 
 # ── AudD Mix Digestor ─────────────────────────────────────────────────────────
 
-AUDD_API_URL = "https://enterprise.audd.io/"
+AUDD_API_URL = "https://api.audd.io/"
 MUSICGEN_MODEL = "meta/musicgen"
 
 
@@ -454,10 +454,17 @@ def parse_enterprise_result(results):
     raw_count = len(results)
 
     for match in results:
-        if not match or "songs" not in match or not match["songs"]:
+        if not match:
             continue
 
-        song = match["songs"][0]
+        # Support both enterprise format (songs array) and regular API (flat result)
+        if "songs" in match and match["songs"]:
+            song = match["songs"][0]
+        elif match.get("artist") or match.get("title"):
+            song = match  # Regular API returns song data at top level
+        else:
+            continue
+
         offset = match.get("offset", 0)
         artist = song.get("artist", "Unknown")
         title = song.get("title", "Unknown")
@@ -494,8 +501,8 @@ def parse_enterprise_result(results):
         else:
             seen_tracks[track_key]["offsets"].append(offset)
 
-    # Filter: track must appear in 3+ scan windows to be real (removes noise/fragments)
-    tracks = [t for t in seen_tracks.values() if len(t.get("offsets", [t["first_offset"]])) >= 3]
+    # Filter: include all matched tracks (regular API gives 1 match per chunk)
+    tracks = list(seen_tracks.values())
     tracks = sorted(tracks, key=lambda t: t["first_offset"])
     for i, track in enumerate(tracks):
         track["position"] = i + 1
@@ -506,8 +513,8 @@ def parse_enterprise_result(results):
 
 
 # ── Chunked AudD Scanning ────────────────────────────────────────────────────
-CHUNK_DURATION = 300   # 5 minutes per chunk
-CHUNK_CONCURRENCY = 3  # max parallel AudD calls
+CHUNK_DURATION = 60    # 1 minute per chunk (regular API: 1 match per chunk)
+CHUNK_CONCURRENCY = 5  # max parallel AudD calls
 
 
 def _split_audio_chunks(audio_path: str, chunk_secs: int = CHUNK_DURATION) -> list:
@@ -532,13 +539,11 @@ def _split_audio_chunks(audio_path: str, chunk_secs: int = CHUNK_DURATION) -> li
 
 
 async def _scan_chunk(chunk_path: str, token: str, offset_secs: int) -> list:
-    """Send one audio chunk to AudD, return results with adjusted offsets."""
+    """Send one audio chunk to AudD, return results with adjusted offsets.
+    Regular API returns one result per request. We send the chunk file directly."""
     data = {
         "api_token": token,
-        "accurate_offsets": "true",
         "return": "spotify,apple_music,deezer",
-        "skip": "1",
-        "every": "3",
     }
 
     with open(chunk_path, "rb") as f:
@@ -555,17 +560,17 @@ async def _scan_chunk(chunk_path: str, token: str, offset_secs: int) -> list:
 
     if result.get("status") == "error":
         log_error("AudD", f"Chunk scan error: {result.get('error', {}).get('error_message', 'unknown')}", json.dumps(result.get("error", {})))
-
-    if "result" not in result or not result["result"]:
-        logger.info("AudD chunk returned no matches (offset %ds, response status: %s)", offset_secs, result.get("status"))
         return []
 
-    # Adjust offsets by chunk start time
-    for match in result["result"]:
-        if "offset" in match:
-            match["offset"] = int(float(match["offset"])) + offset_secs
+    # Regular API: result is a single match object (or null)
+    match = result.get("result")
+    if not match:
+        logger.info("AudD chunk returned no match (offset %ds)", offset_secs)
+        return []
 
-    return result["result"]
+    # Wrap single match in list format compatible with parse_enterprise_result
+    match["offset"] = offset_secs
+    return [match]
 
 
 async def _scan_audio_chunked(audio_path: str, token: str, progress_cb=None) -> dict:
