@@ -553,7 +553,11 @@ async def _scan_chunk(chunk_path: str, token: str, offset_secs: int) -> list:
         response.raise_for_status()
         result = response.json()
 
+    if result.get("status") == "error":
+        log_error("AudD", f"Chunk scan error: {result.get('error', {}).get('error_message', 'unknown')}", json.dumps(result.get("error", {})))
+
     if "result" not in result or not result["result"]:
+        logger.info("AudD chunk returned no matches (offset %ds, response status: %s)", offset_secs, result.get("status"))
         return []
 
     # Adjust offsets by chunk start time
@@ -705,6 +709,8 @@ async def digestor(file: UploadFile = File(...)):
 
     try:
         parsed = await _scan_audio_chunked(tmp.name, token)
+        if not parsed.get("tracks"):
+            log_error("Digestor", f"No tracks found in uploaded file: {file.filename}", f"chunks_scanned={parsed.get('chunks_scanned',0)}, raw_matches={parsed.get('raw_matches',0)}")
         return parsed
     except httpx.TimeoutException:
         return JSONResponse({"error": "Request timed out. Mix may be too large.", "tracks": []}, status_code=200)
@@ -957,6 +963,9 @@ async def _run_digest_job(job_id: str, url: str):
             job["scan_progress"] = f"{done}/{total}"
 
         parsed = await _scan_audio_chunked(tmp_path, token, progress_cb=on_chunk_progress)
+
+        if not parsed.get("tracks"):
+            log_error("Digestor", f"URL digest: 0 tracks found", f"title={job['metadata'].get('title')}, chunks={parsed.get('chunks_scanned',0)}, raw_matches={parsed.get('raw_matches',0)}, file_size={file_size}")
 
         # Step 4: Finalize
         job["status"] = "parsing"
