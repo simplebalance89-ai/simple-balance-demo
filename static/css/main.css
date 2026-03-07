@@ -1584,13 +1584,17 @@ html { scroll-behavior: smooth; }
     border: 1px solid var(--sbm-border-accent);
     border-radius: var(--sbm-radius-lg);
     padding: 20px;
-    margin: 0 20px 16px;
+    margin: 0 auto 16px;
+    max-width: 500px;
+    width: 100%;
+    box-sizing: border-box;
 }
 .profile-card h3 {
     font-family: var(--sbm-font-display);
     font-size: 1.1rem;
     color: var(--sbm-accent-light);
     margin-bottom: 12px;
+    text-align: center;
 }
 
 /* ===== SWIM LANES ===== */

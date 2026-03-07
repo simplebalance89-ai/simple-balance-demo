@@ -553,7 +553,19 @@ function generateAudio() {
     })
     .then(function(data) {
         if (data.error) {
-            container.innerHTML = '<div style="text-align:center;padding:16px;color:#EF4444;font-size:0.85rem;">' + data.error + '</div>';
+            // Audio unavailable — fall back to text description
+            fetch('/api/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ genre: prompt, bpm: 128, key: 'Am' })
+            }).then(function(r) { return r.json(); }).then(function(d) {
+                container.innerHTML = '<div style="text-align:center;padding:8px 0 12px;font-size:0.75rem;color:rgba(255,255,255,0.3);">Audio gen offline — here\'s your AI track concept:</div>';
+                var descDiv = document.createElement('div');
+                renderGenResult(descDiv, d, true);
+                container.appendChild(descDiv);
+            }).catch(function() {
+                container.innerHTML = '<div style="text-align:center;padding:16px;color:rgba(255,255,255,0.4);font-size:0.85rem;">Audio generation temporarily offline. Try the genre buttons above.</div>';
+            });
             return;
         }
         container.innerHTML =
@@ -566,7 +578,21 @@ function generateAudio() {
             '</div>';
     })
     .catch(function(err) {
-        container.innerHTML = '<div style="text-align:center;padding:16px;color:#EF4444;font-size:0.85rem;">Failed: ' + err.message + '</div>';
+        // Audio gen failed — generate text description as fallback
+        container.innerHTML =
+            '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:20px;text-align:center;">' +
+                '<div style="font-size:0.85rem;color:#D4A017;margin-bottom:8px;">Audio generation unavailable right now</div>' +
+                '<div style="font-size:0.75rem;color:rgba(255,255,255,0.4);margin-bottom:12px;">Generating a track description instead...</div>' +
+            '</div>';
+        fetch('/api/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ genre: prompt, bpm: 128, key: 'Am' })
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            renderGenResult(container, d, true);
+        }).catch(function() {
+            container.innerHTML = '<div style="text-align:center;padding:16px;color:rgba(255,255,255,0.4);font-size:0.85rem;">Audio generation is temporarily offline. Try the genre buttons above for AI track descriptions.</div>';
+        });
     });
 }
 
