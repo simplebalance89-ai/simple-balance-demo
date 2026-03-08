@@ -1800,6 +1800,29 @@ function buildPressKitExperience(name, modeName) {
                 </div>
             </div>
 
+            <!-- Flyer Generator -->
+            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:20px;margin-bottom:16px;">
+                <div style="font-size:0.9rem;font-weight:700;color:#FFE082;margin-bottom:12px;">🎨 Event Flyer Generator</div>
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                    <input type="text" id="flyerEventName" placeholder="Event name (e.g. Deep House Sunday)" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#fff;font-size:0.85rem;box-sizing:border-box;">
+                    <div style="display:flex;gap:8px;">
+                        <input type="text" id="flyerDate" placeholder="Date (e.g. March 15)" style="flex:1;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#fff;font-size:0.8rem;box-sizing:border-box;">
+                        <input type="text" id="flyerTime" placeholder="Time (e.g. 10pm)" style="flex:1;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#fff;font-size:0.8rem;box-sizing:border-box;">
+                    </div>
+                    <input type="text" id="flyerVenue" placeholder="Venue name + address" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#fff;font-size:0.8rem;box-sizing:border-box;">
+                    <input type="text" id="flyerLineup" placeholder="Lineup (e.g. DJ Pete, Guest TBA)" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#fff;font-size:0.8rem;box-sizing:border-box;">
+                    <select id="flyerStyle" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:#fff;font-size:0.8rem;box-sizing:border-box;">
+                        <option value="dark">Dark / Underground</option>
+                        <option value="neon">Neon / Club</option>
+                        <option value="minimal">Minimal / Clean</option>
+                        <option value="tropical">Tropical / Beach</option>
+                        <option value="retro">Retro / Vintage</option>
+                    </select>
+                    <button onclick="generateFlyer()" style="padding:12px 20px;background:linear-gradient(135deg,#D4A017,#B8860B);color:#0D0D1A;border:none;border-radius:10px;font-weight:800;cursor:pointer;font-size:0.85rem;">Generate Flyer</button>
+                </div>
+                <div id="flyerResult" style="margin-top:12px;"></div>
+            </div>
+
             <!-- Export -->
             <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
                 <button onclick="savePressKit()" class="btn-primary" style="padding:14px 28px;border-radius:16px;font-size:0.9rem;">💾 Save Press Kit</button>
@@ -1882,6 +1905,123 @@ function savePressKit() {
 
 function exportPressKit() {
     sbmToast('Press kit export coming soon — shareable link & PDF download.', 'info');
+}
+
+/* ===== FLYER GENERATOR ===== */
+var FLYER_PALETTES = {
+    dark:     { bg: '#0a0a0a', accent: '#D4A017', text: '#ffffff', sub: '#888888' },
+    neon:     { bg: '#0D0D1A', accent: '#00FF88', text: '#ffffff', sub: '#00BFFF' },
+    minimal:  { bg: '#f5f5f0', accent: '#111111', text: '#111111', sub: '#666666' },
+    tropical: { bg: '#0B3D2E', accent: '#FFD700', text: '#ffffff', sub: '#7FFFD4' },
+    retro:    { bg: '#2D1B33', accent: '#FF6B35', text: '#FFECD2', sub: '#C4A35A' }
+};
+
+function generateFlyer() {
+    var name = (document.getElementById('flyerEventName').value || '').trim();
+    if (!name) { showToast('Enter an event name', true); return; }
+    var date = document.getElementById('flyerDate').value || '';
+    var time = document.getElementById('flyerTime').value || '';
+    var venue = document.getElementById('flyerVenue').value || '';
+    var lineup = document.getElementById('flyerLineup').value || '';
+    var style = document.getElementById('flyerStyle').value || 'dark';
+    var palette = FLYER_PALETTES[style] || FLYER_PALETTES.dark;
+
+    var container = document.getElementById('flyerResult');
+    container.innerHTML =
+        '<canvas id="flyerCanvas" width="600" height="800" style="width:100%;border-radius:12px;border:1px solid rgba(255,255,255,0.1);"></canvas>' +
+        '<div style="display:flex;gap:8px;margin-top:10px;justify-content:center;">' +
+            '<button onclick="downloadFlyer()" style="padding:10px 20px;background:#D4A017;color:#0D0D1A;border:none;border-radius:8px;font-weight:700;font-size:0.8rem;cursor:pointer;">Download PNG</button>' +
+            '<button onclick="copyFlyerText()" style="padding:10px 20px;background:rgba(255,255,255,0.08);color:#FFE082;border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-weight:700;font-size:0.8rem;cursor:pointer;">Copy Text</button>' +
+        '</div>';
+
+    var canvas = document.getElementById('flyerCanvas');
+    var ctx = canvas.getContext('2d');
+
+    // Background
+    ctx.fillStyle = palette.bg;
+    ctx.fillRect(0, 0, 600, 800);
+
+    // Decorative lines
+    ctx.strokeStyle = palette.accent;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(20, 20, 560, 760);
+    ctx.strokeRect(30, 30, 540, 740);
+
+    // Event name
+    ctx.fillStyle = palette.accent;
+    ctx.font = 'bold 42px "Playfair Display", Georgia, serif';
+    ctx.textAlign = 'center';
+    wrapText(ctx, name.toUpperCase(), 300, 200, 500, 50);
+
+    // Divider
+    ctx.fillStyle = palette.accent;
+    ctx.fillRect(200, 280, 200, 2);
+
+    // Date + Time
+    ctx.fillStyle = palette.text;
+    ctx.font = 'bold 28px "Nunito", sans-serif';
+    var dateTime = [date, time].filter(Boolean).join(' | ');
+    if (dateTime) ctx.fillText(dateTime, 300, 340);
+
+    // Venue
+    ctx.fillStyle = palette.sub;
+    ctx.font = '20px "Nunito", sans-serif';
+    if (venue) ctx.fillText(venue, 300, 390);
+
+    // Lineup
+    if (lineup) {
+        ctx.fillStyle = palette.text;
+        ctx.font = 'bold 24px "Nunito", sans-serif';
+        ctx.fillText('LINEUP', 300, 470);
+        ctx.fillStyle = palette.accent;
+        ctx.font = '22px "Nunito", sans-serif';
+        var acts = lineup.split(',').map(function(a) { return a.trim(); });
+        acts.forEach(function(act, i) {
+            ctx.fillText(act, 300, 510 + i * 35);
+        });
+    }
+
+    // Footer
+    ctx.fillStyle = palette.sub;
+    ctx.font = '14px "Nunito", sans-serif';
+    ctx.fillText('simple / balance', 300, 740);
+
+    // Store text for copy
+    canvas.dataset.flyerText = [name, dateTime, venue, lineup ? 'Lineup: ' + lineup : ''].filter(Boolean).join('\n');
+}
+
+function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+    var words = text.split(' ');
+    var line = '';
+    for (var i = 0; i < words.length; i++) {
+        var test = line + words[i] + ' ';
+        var m = ctx.measureText(test);
+        if (m.width > maxWidth && i > 0) {
+            ctx.fillText(line.trim(), x, y);
+            line = words[i] + ' ';
+            y += lineHeight;
+        } else {
+            line = test;
+        }
+    }
+    ctx.fillText(line.trim(), x, y);
+}
+
+function downloadFlyer() {
+    var canvas = document.getElementById('flyerCanvas');
+    if (!canvas) return;
+    var link = document.createElement('a');
+    link.download = 'flyer.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+}
+
+function copyFlyerText() {
+    var canvas = document.getElementById('flyerCanvas');
+    if (!canvas || !canvas.dataset.flyerText) return;
+    navigator.clipboard.writeText(canvas.dataset.flyerText).then(function() {
+        showToast('Flyer text copied!');
+    });
 }
 
 /* ===== VIBE CHECK (DJ Side) ===== */
